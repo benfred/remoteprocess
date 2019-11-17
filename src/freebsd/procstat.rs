@@ -139,7 +139,7 @@ pub fn cwd(pid: pid_t) -> Result<String, Error> {
 }
 
 pub fn processes() -> Result<std::collections::HashMap<pid_t, pid_t>, Error> {
-    procstat_call(KERN_PROC_PROC, 0, 0, &|prstat, kinfo, count| {
+    procstat_call(KERN_PROC_PROC, 0, 0, &|_, kinfo, count| {
         let mut ret = std::collections::HashMap::new();
         let proc = unsafe { std::slice::from_raw_parts(kinfo, count as usize) };
         for proc in proc {

@@ -52,7 +52,7 @@ fn main() {
     }
 }
 
-#[cfg(not(feature="unwind"))]]
+#[cfg(not(feature="unwind"))]
 fn main() {
     panic!("unwind not supported!");
 }

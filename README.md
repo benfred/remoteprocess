@@ -1,5 +1,8 @@
 remoteprocess
 =====
+[![Build Status](https://travis-ci.org/benfred/remoteprocess.svg?branch=master)](https://travis-ci.org/benfred/remoteprocess)
+[![Windows Build status](https://ci.appveyor.com/api/projects/status/38wvhv0t8tqwc6vs?svg=true)](https://ci.appveyor.com/project/benfred/remoteprocess)
+[![FreeBSD Build Status](https://api.cirrus-ci.com/github/benfred/remoteprocess.svg)](https://cirrus-ci.com/github/benfred/remoteprocess)
 
 This crate provides a cross platform way of querying information about other processes running on
 the system. This let's you build profiling and debugging tools.
@@ -8,10 +11,15 @@ Features:
 
 - Suspending the execution of the process
 - Getting the process executable name and current working directory
+- Get the command line of the process
 - Listing all the threads in the process
+- Get all the child processes of the process
 - Figure out if a thread is active or not
 - Read memory from the other proceses (using read_proceses_memory crate)
-- Getting a stack trace for a thread in the target process
+
+By enabling the unwind feature you can also:
+
+- Get a stack trace for a thread in the target process
 - Resolve symbols for an address in the other process
 
 This crate provides implementations for Linux, OSX, FreeBSD and Windows
@@ -60,4 +68,4 @@ processors, or from FreeBSD.
 
 This crate heavily relies on the [gimli](https://github.com/gimli-rs/gimli) project. Gimli is an
 amazing tool for parsing DWARF debugging information, and we are using it here for looking up filename
-and line numbers given an instruction pointeer.
+and line numbers given an instruction pointer.

@@ -1,5 +1,5 @@
 use libc::{c_int, pid_t, c_void, lwpid_t};
-use libc::{PT_ATTACH, PT_DETACH, PT_GETREGS};
+use libc::{PT_ATTACH, PT_DETACH};
 
 use std::{ptr};
 use std::io::Error;
@@ -27,12 +27,6 @@ extern "C" {
 
 pub fn attach(tid: lwpid_t) -> Result<(), Error> {
     ptrace!(PT_ATTACH, tid, ptr::null(), 0);
-
-    Ok(())
-}
-
-pub fn getregs(tid: lwpid_t, addr: *const c_void) -> Result<(), Error> {
-    ptrace!(PT_GETREGS, tid, addr, 0);
 
     Ok(())
 }

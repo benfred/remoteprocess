@@ -151,7 +151,9 @@ mod tests {
 
     impl Drop for DroppableProcess {
         fn drop(&mut self) {
-            self.inner.kill();
+            if let Err(e) = self.inner.kill() {
+                warn!("Failed to kill process: {}", e);
+            }
         }
     }
 
@@ -248,7 +250,7 @@ mod tests {
                 assert_eq!(process.exe()?, EXECUTABLE);
 
                 Ok(())
-            });
+            }).unwrap();
     }
 
     #[test]
@@ -258,7 +260,7 @@ mod tests {
                 assert_eq!(process.cwd()?, CWD);
 
                 Ok(())
-            });
+            }).unwrap();
     }
 
 
@@ -273,7 +275,7 @@ mod tests {
 
                 assert!(active_thread.is_some());
 
-                if let Some(thread) = active_thread {
+                if let Some(_) = active_thread {
                     let _lock = process.lock();
 
                     let threads = process.threads()?;
@@ -310,7 +312,7 @@ mod tests {
 
                 assert!(active_thread.is_some());
 
-                if let Some(thread) = active_thread {
+                if let Some(_thread) = active_thread {
                     let _lock = process.lock()?;
                     let _thread_lock = active_thread.unwrap().lock()?;
 
