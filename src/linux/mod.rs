@@ -55,9 +55,9 @@ impl Process {
         f.read_to_end(&mut buffer)?;
 
         let mut ret = Vec::new();
-        for arg in buffer.split(|b| *b == 0) {
+        for arg in buffer.split(|b| *b == 0).filter(|b| b.len() > 0) {
             ret.push(String::from_utf8(arg.to_vec())
-                .map_err(|e| Error::Other(format!("Failed to convert ut8 {}", e)))?)
+                .map_err(|e| Error::Other(format!("Failed to convert utf8 {}", e)))?)
         }
         Ok(ret)
     }
