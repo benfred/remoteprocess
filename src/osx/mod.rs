@@ -7,7 +7,7 @@ use mach;
 
 use super::Error;
 use mach::kern_return::{KERN_SUCCESS};
-use mach::port::{mach_port_name_t, MACH_PORT_NULL};
+use mach::port::{mach_port_t, mach_port_name_t, MACH_PORT_NULL};
 use mach::traps::{task_for_pid, mach_task_self};
 use read_process_memory::{CopyAddress, ProcessHandle};
 
@@ -18,6 +18,7 @@ use mach::mach_types::{thread_act_t};
 use mach::structs::x86_thread_state64_t;
 use mach::thread_status::x86_THREAD_STATE64;
 use mach::thread_act::{thread_get_state};
+use mach::vm_types::{mach_vm_address_t, mach_vm_size_t};
 
 pub use self::utils::{TaskLock, ThreadLock};
 
@@ -113,6 +114,9 @@ impl Process {
             let tid = unsafe { *threads.offset(i as isize) };
             ret.push(Thread{tid});
         }
+
+        let memsize = thread_count as usize * std::mem::size_of::<Tid>();
+        unsafe { vm_deallocate(mach_task_self(), threads as mach_vm_address_t, memsize as mach_vm_size_t); }
         Ok(ret)
     }
 
@@ -155,6 +159,12 @@ impl super::ProcessMemory for Process {
 use self::mach_thread_bindings::{thread_info, thread_basic_info, thread_identifier_info,
                                  THREAD_IDENTIFIER_INFO, THREAD_BASIC_INFO,
                                  TH_FLAGS_IDLE, TH_STATE_RUNNING};
+
+extern "C" {
+    fn vm_deallocate(target_task: mach_port_t,
+                     address: mach_vm_address_t,
+                     size: mach_vm_size_t) -> kern_return_t;
+}
 
 
 impl Thread {
