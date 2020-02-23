@@ -193,7 +193,7 @@ impl ThreadLock {
 
 impl Drop for ThreadLock {
     fn drop(&mut self) {
-        if let Err(e) = ptrace::detach(self.tid) {
+        if let Err(e) = ptrace::detach(self.tid, None) {
             warn!("Failed to detach from thread {} : {}", self.tid, e);
         }
         debug!("detached from thread {}", self.tid);
