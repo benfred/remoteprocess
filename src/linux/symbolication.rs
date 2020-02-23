@@ -7,7 +7,7 @@ use memmap;
 use memmap::Mmap;
 
 use object::{self, Object};
-use addr2line::Context;
+use addr2line::ObjectContext;
 use goblin;
 use goblin::elf::program_header::*;
 use crate::{StackFrame, Error, Process, Pid };
@@ -162,7 +162,7 @@ impl Symbolicator {
 
 pub struct SymbolData {
     // Contains symbol info for a single binary
-    ctx: Context,
+    ctx: ObjectContext,
     offset: u64,
     symbols: Vec<(u64, u64, String)>,
     dynamic_symbols: Vec<(u64, u64, String)>,
@@ -184,7 +184,7 @@ impl SymbolData {
             }
         };
 
-        let ctx = Context::new(&file)
+        let ctx = ObjectContext::new(&file)
             .map_err(|e| Error::Other(format!("Failed to get symbol context for {}: {:?}", filename, e)))?;
 
         let mut symbols = Vec::new();
@@ -229,7 +229,7 @@ impl SymbolData {
                     ret.function = Some(func.raw_name().map_err(error_handler)?.to_string());
                 }
                 if let Some(loc) = frame.location {
-                    ret.line = loc.line;
+                    ret.line = loc.line.map(|x| x as u64);
                     if let Some(file) = loc.file.as_ref() {
                         ret.filename = Some(file.to_string());
                     }
