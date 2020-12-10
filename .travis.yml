@@ -26,7 +26,7 @@ before_install:
   elif [ $TARGET = x86_64-unknown-linux-gnu ]; then
       sudo apt-get install libunwind-dev
   elif [ $TARGET = armv7-unknown-linux-gnueabihf ]; then
-      sudo apt-get install gcc-arm-linux-gnueabihf  gcc-5-multilib-arm-linux-gnueabihf libc-dev-armhf-cross
+      sudo apt-get install gcc-arm-linux-gnueabihf  gcc-5-multilib-arm-linux-gnueabihf libc-dev-armhf-cross libunwind-dev
   elif [ $TARGET = i686-unknown-linux-gnu ]; then
       sudo apt-get install gcc-multilib
   fi
@@ -35,7 +35,7 @@ script:
 - |
   if [ $TARGET = armv7-unknown-linux-gnueabihf ]; then
     # we can't run the unittest w/ ARM so just test that we can compile
-    cargo build --verbose --target $TARGET
+    cargo build --verbose --target $TARGET --features=unwind
   elif [ $TARGET = i686-unknown-linux-gnu ]; then
     # doesn't seem like the integration tests work with i686 (building a 32bit version
     # then using to profile a 64bit pythhon issus?). Just test we can compile

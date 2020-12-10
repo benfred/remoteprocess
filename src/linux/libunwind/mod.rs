@@ -91,7 +91,7 @@ impl Cursor {
 
     pub fn proc_name(&self) -> Result<String> {
         unsafe {
-            let mut name = vec![0_i8; 128];
+            let mut name = vec![0_u8 as c_char; 128];
             let cursor = &self.cursor as *const _ as *mut _;
             let mut raw_offset = std::mem::uninitialized();
 
@@ -156,10 +156,9 @@ extern {
     static _UPT_accessors: unw_accessors_t;
 }
 
-#[cfg(target_pointer_width="64")]
+#[cfg(target_arch="x86_64")]
 extern {
-    // functions in libunwind-x86_64.so (TODO: define similar for 32bit)
-     #[link_name="_Ux86_64_create_addr_space"]
+    #[link_name="_Ux86_64_create_addr_space"]
     #[allow(improper_ctypes)]
     fn create_addr_space(acc: *mut unw_accessors_t, byteorder: c_int) -> unw_addr_space_t;
     #[link_name="_Ux86_64_destroy_addr_space"]
@@ -176,7 +175,7 @@ extern {
     fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
 }
 
-#[cfg(target_pointer_width="32")]
+#[cfg(target_arch="x86")]
 extern {
      #[link_name="_Ux86_create_addr_space"]
     fn create_addr_space(acc: *mut unw_accessors_t, byteorder: c_int) -> unw_addr_space_t;
@@ -191,6 +190,25 @@ extern {
     #[link_name="_Ux86_get_proc_name"]
     fn get_proc_name(cursor: *mut unw_cursor, buffer: * mut c_char, len: size_t, offset: *mut unw_word_t) -> c_int;
     #[link_name="_Ux86_set_caching_policy"]
+    fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
+}
+
+#[cfg(target_arch="arm")]
+extern {
+    #[link_name="_Uarm_create_addr_space"]
+    #[allow(improper_ctypes)]
+    fn create_addr_space(acc: *mut unw_accessors_t, byteorder: c_int) -> unw_addr_space_t;
+    #[link_name="_Uarm_destroy_addr_space"]
+    fn destroy_addr_space(addr: unw_addr_space_t) -> c_void;
+    #[link_name="_Uarm_init_remote"]
+    fn init_remote(cursor: *mut unw_cursor_t, addr: unw_addr_space_t, ptr: *mut c_void) -> c_int;
+    #[link_name="_Uarm_get_reg"]
+    fn get_reg(cursor: *mut unw_cursor_t, reg: unw_regnum_t, val: *mut unw_word_t) -> c_int;
+    #[link_name="_Uarm_step"]
+    fn step(cursor: *mut unw_cursor_t) -> c_int;
+    #[link_name="_Uarm_get_proc_name"]
+    fn get_proc_name(cursor: *mut unw_cursor, buffer: * mut c_char, len: size_t, offset: *mut unw_word_t) -> c_int;
+    #[link_name="_Uarm_set_caching_policy"]
     fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
 }
 
