@@ -1,6 +1,8 @@
 use libc::{c_int, c_void, c_char, size_t, pid_t};
 use std;
 
+#[cfg_attr(target_arch="x86_64", path="bindings_x86_64.rs")]
+#[cfg_attr(target_arch="arm", path="bindings_arm.rs")]
 mod bindings;
 
 use self::bindings::{unw_addr_space_t, unw_cursor, unw_accessors_t, unw_cursor_t, unw_regnum_t, unw_word_t,
@@ -72,7 +74,7 @@ impl Cursor {
         let cursor = &self.cursor as *const _ as *mut _;
 
         match get_reg(cursor, register, &mut value) {
-            0 => Ok(value),
+            0 => Ok(value as u64),
             err => Err(crate::Error::LibunwindError(Error::from(-err)))
         }
     }
