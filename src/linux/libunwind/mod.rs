@@ -79,8 +79,14 @@ impl Cursor {
         }
     }
 
+    #[cfg(target_arch="x86_64")]
     pub fn bx(&self) -> Result<u64> {
         unsafe { self.register(3) }
+    }
+
+    #[cfg(target_arch="arm")]
+    pub fn r5(&self) -> Result<u64> {
+        unsafe { self.register(5) }
     }
 
     pub fn ip(&self) -> Result<u64> {
