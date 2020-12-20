@@ -185,7 +185,15 @@ pub struct ThreadLock {
 impl ThreadLock {
     fn new(tid: nix::unistd::Pid) -> Result<ThreadLock, nix::Error> {
         ptrace::attach(tid)?;
-        wait::waitpid(tid, Some(wait::WaitPidFlag::WSTOPPED | wait::WaitPidFlag::__WALL))?;
+        while let wait::WaitStatus::Stopped(_, sig) = wait::waitpid(tid, Some(wait::WaitPidFlag::WSTOPPED | wait::WaitPidFlag::__WALL))? {
+            if sig == nix::sys::signal::Signal::SIGSTOP {
+                break;
+            }
+
+            debug!("reinjecting non-SIGSTOP signal {} to {}", sig, tid);
+            ptrace::cont(tid, sig)?;
+        }
+
         debug!("attached to thread {}", tid);
         Ok(ThreadLock{tid})
     }
