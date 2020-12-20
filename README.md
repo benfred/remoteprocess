@@ -60,9 +60,14 @@ A complete program with this code can be found in the examples folder.
 
 ## Limitations
 
-Currently we only have implementations for getting stack traces on x86_64 processors running
-Linux/Windows or OSX. We don't have the abilitiy to get stack traces at all from ARM or i686
-processors, or from FreeBSD.
+Currently we only have implementations for getting stack traces on some platforms:
+
+|         | Linux | Windows | OSX | FreeBSD |
+|---------|-------|---------|-----|---------|
+| i686    |       |         |     |         |
+| x86-64  | yes   | yes     |     |         |
+| ARM     | yes   |         |     |         |
+| Aarch64 |       |         |     |         |
 
 ## Credits
 
