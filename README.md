@@ -65,7 +65,7 @@ Currently we only have implementations for getting stack traces on some platform
 |         | Linux | Windows | OSX | FreeBSD |
 |---------|-------|---------|-----|---------|
 | i686    |       |         |     |         |
-| x86-64  | yes   | yes     | yes |         |
+| x86-64  | yes   | yes     |     |         |
 | ARM     | yes   |         |     |         |
 | Aarch64 |       |         |     |         |
 
