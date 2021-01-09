@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use memmap;
 use memmap::Mmap;
 
-use object::{self, Object};
+use object::{self, Object, ObjectSymbol};
 use addr2line::ObjectContext;
 use goblin;
 use goblin::elf::program_header::*;
@@ -188,20 +188,20 @@ impl SymbolData {
             .map_err(|e| Error::Other(format!("Failed to get symbol context for {}: {:?}", filename, e)))?;
 
         let mut symbols = Vec::new();
-        for (_, sym) in file.symbols() {
-            if let Some(name) = sym.name() {
+        for sym in file.symbols() {
+            if let Ok(name) = sym.name() {
                 symbols.push((sym.address(), sym.size(), name.to_string()));
             }
         }
-        symbols.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        symbols.sort_unstable_by(|a, b| a.cmp(&b));
 
         let mut dynamic_symbols = Vec::new();
-        for (_, sym) in file.dynamic_symbols() {
-            if let Some(name) = sym.name() {
+        for sym in file.dynamic_symbols() {
+            if let Ok(name) = sym.name() {
                 dynamic_symbols.push((sym.address(), sym.size(), name.to_string()));
             }
         }
-        dynamic_symbols.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        dynamic_symbols.sort_unstable_by(|a, b| a.cmp(&b));
         Ok(SymbolData{ctx, offset, dynamic_symbols, symbols, filename: filename.to_owned()})
     }
 

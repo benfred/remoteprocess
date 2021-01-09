@@ -44,7 +44,7 @@ impl Unwinder {
         unsafe
         {
             let upt = _UPT_create(thread.id()? as _);
-            let mut cursor = std::mem::uninitialized();
+            let mut cursor = std::mem::MaybeUninit::uninit().assume_init();
             let ret = init_remote(&mut cursor, self.addr_space, upt);
             if ret != 0 {
                 return Err(crate::Error::LibunwindError(Error::from(-ret)));
@@ -101,7 +101,7 @@ impl Cursor {
         unsafe {
             let mut name = vec![0_u8 as c_char; 128];
             let cursor = &self.cursor as *const _ as *mut _;
-            let mut raw_offset = std::mem::uninitialized();
+            let mut raw_offset = std::mem::MaybeUninit::uninit().assume_init();
 
             loop {
                 match get_proc_name(cursor, name.as_mut_ptr(), name.len(), &mut raw_offset) {
