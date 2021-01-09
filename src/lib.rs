@@ -131,20 +131,7 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::NoBinaryForAddress(_) => "No binary found for address",
-            Error::GoblinError(ref e) => e.description(),
-            Error::IOError(ref e) => e.description(),
-            #[cfg(use_libunwind)]
-            Error::LibunwindError(ref e) => e.description(),
-            #[cfg(target_os="linux")]
-            Error::NixError(ref e) => e.description(),
-            Error::Other(ref e) => e,
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match *self {
             Error::GoblinError(ref e) => Some(e),
             Error::IOError(ref e) => Some(e),

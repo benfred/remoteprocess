@@ -14,26 +14,26 @@ libc = "0.2"
 log = "0.4"
 proc-maps = "0.1.6"
 benfred-read-process-memory = "0.2.0"
-goblin = "0.1.3"
+goblin = "0.3"
 memmap = "0.7.0"
-lazy_static = "1.1.0"
+lazy_static = "1.4.0"
 regex = "1"
 
 [target.'cfg(target_os="macos")'.dependencies]
 mach_o_sys = "0.1.1"
 mach = "0.3.2"
-libproc = "0.7"
+libproc = "0.9"
 
 [target.'cfg(target_os="linux")'.dependencies]
-nix="0.17"
-object = "0.17"
-addr2line = "0.11"
+nix="0.19"
+object = "0.22"
+addr2line = "0.14"
 
 [target.'cfg(windows)'.dependencies]
 winapi = {version = "0.3", features = ["winbase", "consoleapi", "wincon", "handleapi", "timeapi", "processenv" ]}
 
 [dev-dependencies]
-env_logger = "0.7"
+env_logger = "0.8"
 
 [features]
 default = []
