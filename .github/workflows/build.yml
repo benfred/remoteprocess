@@ -43,39 +43,18 @@ jobs:
     - name: Run tests
       run: cargo test --verbose --features unwind
 
-  # musl targets: ideally we'd use a matrix strategy here, but
-  # github actions don't seem to support expressions in the 'uses'
-  # for the docker image, so we've unrolled here
   build-linux-musl-x86_64:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [i686-musl, x86_64-musl]
+    - container:
+        image: docker://benfred/rust-musl-cross:${{ target }}
+        volumes:
+            - ${{ env.GITHUB_WORKSPACE }}:/home/rust/src
     steps:
     - uses: actions/checkout@v2
-    - uses: docker://benfred/rust-musl-cross:x86_64-musl
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
       run: cargo test --verbose --features unwind
-
-  build-linux-musl-i686:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: docker://benfred/rust-musl-cross:i686-musl
-    - name: Build
-      run: cargo build --verbose --examples --features unwind
-
-  build-linux-musl-aarch64:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: docker://benfred/rust-musl-cross:aarch64-musl
-    - name: Build
-      run: cargo build --verbose --examples --features unwind
-
-  build-linux-musl-armv7:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: docker://benfred/rust-musl-cross:armv7-musleabihf
-    - name: Build
-      run: cargo build --verbose --examples --features unwind
