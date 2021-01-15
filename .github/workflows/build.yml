@@ -49,9 +49,9 @@ jobs:
       matrix:
         target: [i686-musl, x86_64-musl]
     container:
-      image: docker://benfred/rust-musl-cross:${{ target }}
-      volumes:
-        - ${{ env.GITHUB_WORKSPACE }}:/home/rust/src
+      image: docker://benfred/rust-musl-cross:${{ matrix.target }}
+      # volumes:
+      #  - ${{ env.GITHUB_WORKSPACE }}:/home/rust/src
     steps:
     - uses: actions/checkout@v2
     - name: Build
