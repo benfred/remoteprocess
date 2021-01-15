@@ -59,7 +59,7 @@ jobs:
       run: cargo build --verbose --examples
     - name: Build unwind
       run: cargo build --verbose --examples --features unwind
-      if: matrix.target == 'x86_64-musl'  || matrix.target == "armv7-musleabihf"
+      if: matrix.target == 'x86_64-musl'  || matrix.target == 'armv7-musleabihf'
     - name: Run tests
       run: cargo test --verbose --features unwind
       if: matrix.target == 'x86_64-musl' 
