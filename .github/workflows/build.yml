@@ -47,15 +47,17 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: 
-        docker_image: 
-          - docker://benfred/rust-musl-cross:x86_64-musl
-          - docker://benfred/rust-musl-cross:i686-musl
-          - docker://benfred/rust-musl-cross:armv7-musleabihf-musl
-          - docker://benfred/rust-musl-cross:aarch64-musl
+        docker_tag: 
+          - x86_64-musl
+          - i686-musl
+          - armv7-musleabihf-musl
+          - aarch64-musl
 
     steps:
     - uses: actions/checkout@v2
-    - uses: ${{ matrix.docker_image }}
+    - uses: actions/docker/cli@master
+     with:
+       args: 'run docker://benfred/rust-musl-cross:${{matrix.docker_tag}}'
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
