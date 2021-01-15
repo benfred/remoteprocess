@@ -55,12 +55,12 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: system info
-      run:
-        - cat /etc/os-release
-        - whoami
-        - which rustup
-        - rustup toolchain list
-        - rustup target list
+      run: |
+        cat /etc/os-release
+        whoami
+        which rustup
+        rustup toolchain list
+        rustup target list
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
