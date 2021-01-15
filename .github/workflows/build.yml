@@ -42,3 +42,18 @@ jobs:
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
       run: cargo test --verbose --features unwind
+
+  build-linux-musl:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [i686-musl, x86_64-musl, armv7-musleabihf, aarch64-musl]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: docker://benfred/rust-musl-cross:${{ matrix.target }}
+    - name: Build
+      run: cargo build --verbose --examples --features unwind
+    # can only run tests on x86_64  (since we're cross compiling)
+    - name: Run tests
+      run: cargo test --verbose --features unwind
+      if: ${{ matrix.target }} == 'x86_64-musl'
