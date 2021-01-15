@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-armv7:
+  build-linux-armv7:
     runs-on: [self-hosted, linux, arm]
     steps:
     - uses: actions/checkout@v2
@@ -18,6 +18,7 @@ jobs:
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
       run: cargo test --verbose --examples --features unwind
+
   build-mac:
     runs-on: macos-latest
     steps:
@@ -34,8 +35,9 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
     - uses: actions/checkout@v2
+    - run: sudo apt install libunwind-dev
+      if: runner.os == 'Linux'
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
       run: cargo test --verbose --examples --features unwind
-
