@@ -55,17 +55,10 @@ jobs:
         CARGO_HOME: /root/.cargo
     steps:
     - uses: actions/checkout@v2
-    - name: system info
-      run: |
-        cat /etc/os-release
-        whoami
-        which rustup
-        rustup toolchain list
-        rustup target list
     - name: Build
       run: cargo build --verbose --examples
     - name: Build unwind
-      run: cargo build --verbose --examples --features unwind
       if: ${{ matrix.target }} == "x86_64-musl" || ${{ matrix.target }} == "armv7-musleabihf"
+      run: cargo build --verbose --examples --features unwind
     - name: Run tests
       run: cargo test --verbose
