@@ -17,7 +17,7 @@ jobs:
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
-      run: cargo test --verbose --examples --features unwind
+      run: cargo test --verbose --features unwind
 
   build-mac:
     runs-on: macos-latest
@@ -35,9 +35,10 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
     - uses: actions/checkout@v2
-    - run: sudo apt install libunwind-dev
+    - name: Install Dependencies
+      run: sudo apt install libunwind-dev
       if: runner.os == 'Linux'
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
-      run: cargo test --verbose --examples --features unwind
+      run: cargo test --verbose --features unwind
