@@ -54,10 +54,13 @@ jobs:
       #  - ${{ env.GITHUB_WORKSPACE }}:/home/rust/src
     steps:
     - uses: actions/checkout@v2
-    - name: rust toolchain
-      run: rustup toolchain list
-    - name: rust target
-      run: rustup target list
+    - name: system info
+      run:
+        - cat /etc/os-release
+        - whoami
+        - which rustup
+        - rustup toolchain list
+        - rustup target list
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
