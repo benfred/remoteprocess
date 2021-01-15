@@ -43,7 +43,7 @@ jobs:
     - name: Run tests
       run: cargo test --verbose --features unwind
 
-  build-linux-musl-x86_64:
+  build-linux-musl:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -54,6 +54,10 @@ jobs:
       #  - ${{ env.GITHUB_WORKSPACE }}:/home/rust/src
     steps:
     - uses: actions/checkout@v2
+    - name: rust toolchain
+      run: rustup toolchain list
+    - name: rust target
+      run: rustup target list
     - name: Build
       run: cargo build --verbose --examples --features unwind
     - name: Run tests
