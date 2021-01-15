@@ -47,14 +47,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [i686-musl, x86_64-musl]
+        target: [i686-musl, x86_64-musl, armv7-musleabihf]
     container:
       image: docker://benfred/rust-musl-cross:${{ matrix.target }}
       env:
         RUSTUP_HOME: /root/.rustup
         CARGO_HOME: /root/.cargo
-      # volumes:
-      #  - ${{ env.GITHUB_WORKSPACE }}:/home/rust/src
     steps:
     - uses: actions/checkout@v2
     - name: system info
@@ -65,6 +63,9 @@ jobs:
         rustup toolchain list
         rustup target list
     - name: Build
+      run: cargo build --verbose --examples
+    - name: Build unwind
       run: cargo build --verbose --examples --features unwind
+      if: ${{ matrix.target }} == "x86_64-musl" || ${{ matrix.target }} == "armv7-musleabihf"
     - name: Run tests
-      run: cargo test --verbose --features unwind
+      run: cargo test --verbose
