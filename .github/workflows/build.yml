@@ -50,6 +50,9 @@ jobs:
         target: [i686-musl, x86_64-musl]
     container:
       image: docker://benfred/rust-musl-cross:${{ matrix.target }}
+      env:
+        RUSTUP_HOME: /root/.rustup
+        CARGO_HOME: /root/.cargo
       # volumes:
       #  - ${{ env.GITHUB_WORKSPACE }}:/home/rust/src
     steps:
