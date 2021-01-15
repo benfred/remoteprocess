@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  raspberry-pi:
+  build-armv7:
     runs-on: [self-hosted, linux, arm]
     steps:
     - uses: actions/checkout@v2
@@ -18,7 +18,7 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-  hosted:
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
