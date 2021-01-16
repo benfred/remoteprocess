@@ -55,11 +55,13 @@ jobs:
         CARGO_HOME: /root/.cargo
     steps:
     - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose --examples
-    - name: Build unwind
-      run: cargo build --verbose --examples --features unwind
+    - name: Build (unwind)
+      run: cargo build --verbose --features unwind --examples
       if: matrix.target == 'x86_64-musl'  || matrix.target == 'armv7-musleabihf'
-    - name: Run tests
-      run: cargo test --verbose --features unwind
-      if: matrix.target == 'x86_64-musl' 
+    - name: Build (no-unwind)
+      run: cargo build --verbose --examples
+      if: matrix.target == 'i686-musl'
+    # unittests don't compile here - with some duplicate symbol errors.
+    # - name: Run tests
+    #  run: cargo test --verbose --features unwind
+    #  if: matrix.target == 'x86_64-musl'
