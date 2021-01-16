@@ -43,11 +43,11 @@ jobs:
     - name: Run tests
       run: cargo test --verbose --features unwind
 
-  build-linux-musl:
+  build-linux-cross:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [i686-musl, x86_64-musl, armv7-musleabihf]
+        target: [i686-musl, x86_64-musl, armv7-musleabihf, aarch64-musl]
     container:
       image: docker://benfred/rust-musl-cross:${{ matrix.target }}
       env:
@@ -60,7 +60,7 @@ jobs:
       if: matrix.target == 'x86_64-musl'  || matrix.target == 'armv7-musleabihf'
     - name: Build (no-unwind)
       run: cargo build --verbose --examples
-      if: matrix.target == 'i686-musl'
+      if: matrix.target == 'i686-musl' || matrix.target == 'aarch64-musl'
     # unittests don't compile here - with some duplicate symbol errors.
     # - name: Run tests
     #  run: cargo test --verbose --features unwind
