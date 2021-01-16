@@ -1,7 +1,6 @@
 remoteprocess
 =====
-[![Build Status](https://travis-ci.org/benfred/remoteprocess.svg?branch=master)](https://travis-ci.org/benfred/remoteprocess)
-[![Windows Build status](https://ci.appveyor.com/api/projects/status/38wvhv0t8tqwc6vs?svg=true)](https://ci.appveyor.com/project/benfred/remoteprocess)
+[![Build Status](https://github.com/benfred/remoteprocess/workflows/Build/badge.svg?branch=master)](https://github.com/benfred/remoteprocess/actions?query=branch%3Amaster)
 [![FreeBSD Build Status](https://api.cirrus-ci.com/github/benfred/remoteprocess.svg)](https://cirrus-ci.com/github/benfred/remoteprocess)
 
 This crate provides a cross platform way of querying information about other processes running on
