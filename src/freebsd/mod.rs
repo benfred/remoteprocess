@@ -3,7 +3,6 @@ mod procstat;
 mod ptrace;
 mod lock;
 
-use log::warn;
 use libc::{pid_t, lwpid_t};
 use read_process_memory::{CopyAddress, ProcessHandle};
 
@@ -11,7 +10,7 @@ use std::convert::TryInto;
 use std::sync::{Arc, Weak, Mutex};
 
 use super::{ProcessMemory, Error};
-use freebsd::lock::ProcessLock;
+use crate::freebsd::lock::ProcessLock;
 
 pub type Pid = pid_t;
 pub type Tid = lwpid_t;
@@ -138,6 +137,7 @@ impl ProcessMemory for Process {
 
 #[cfg(test)]
 mod tests {
+    use log::warn;
     use libc::pid_t;
 
     use std::process::{Child, Command};
