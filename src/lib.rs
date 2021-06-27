@@ -50,36 +50,7 @@
 //!     Ok(())
 //! }
 //! ```
-
-extern crate proc_maps;
-extern crate goblin;
 extern crate benfred_read_process_memory as read_process_memory;
-extern crate memmap;
-extern crate libc;
-#[macro_use]
-extern crate log;
-
-#[cfg(target_os="linux")]
-#[macro_use]
-extern crate lazy_static;
-#[cfg(target_os="linux")]
-extern crate regex;
-#[cfg(target_os="linux")]
-extern crate nix;
-#[cfg(target_os="linux")]
-extern crate object;
-#[cfg(target_os="linux")]
-extern crate addr2line;
-
-#[cfg(target_os="macos")]
-extern crate mach_o_sys;
-#[cfg(target_os="macos")]
-extern crate mach;
-#[cfg(target_os="macos")]
-extern crate libproc;
-
-#[cfg(windows)]
-extern crate winapi;
 
 #[cfg(target_os="macos")]
 mod osx;

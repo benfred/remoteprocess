@@ -1,4 +1,5 @@
 use libc::{pid_t, waitpid, WIFSTOPPED};
+use log::error;
 
 use std::io::Error as IoError;
 

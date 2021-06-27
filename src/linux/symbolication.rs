@@ -3,6 +3,7 @@ use std::path::Path;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
+use log::{info, error, warn, debug, trace};
 use memmap;
 use memmap::Mmap;
 

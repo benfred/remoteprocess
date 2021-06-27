@@ -3,7 +3,9 @@ pub mod libunwind;
 #[cfg(use_libunwind)]
 mod symbolication;
 
+use lazy_static::lazy_static;
 use libc::pid_t;
+use log::{debug, info, warn};
 
 use nix::{self, sys::wait, sys::ptrace, {sched::{setns, CloneFlags}}};
 use std::collections::HashMap;

@@ -1,9 +1,3 @@
-extern crate remoteprocess;
-extern crate env_logger;
-extern crate goblin;
-#[cfg(target_os="linux")]
-extern crate nix;
-
 #[cfg(feature="unwind")]
 fn get_backtrace(pid: remoteprocess::Pid) -> Result<(), remoteprocess::Error> {
     // Create a new handle to the process
