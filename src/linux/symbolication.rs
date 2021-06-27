@@ -3,10 +3,11 @@ use std::path::Path;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
+use log::{info, error, warn, debug};
 use memmap;
 use memmap::Mmap;
 
-use object::{self, Object, ObjectSymbol};
+use object;
 use addr2line::ObjectContext;
 use goblin;
 use goblin::elf::program_header::*;
