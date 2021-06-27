@@ -1,4 +1,5 @@
 use super::*;
+use log::error;
 
 extern "C" {
     pub fn thread_suspend(thread: thread_act_t) -> kern_return_t;

@@ -1,3 +1,5 @@
+use log::info;
+use libc::wcslen;
 use winapi::um::winnt::{HANDLE, WCHAR};
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::shared::minwindef::{TRUE, BOOL, DWORD, MAX_PATH};
@@ -9,7 +11,6 @@ use std::os::windows::ffi::{OsStringExt};
 
 use super::super::Error;
 use super::super::StackFrame;
-use libc::wcslen;
 
 pub struct Symbolicator {
     pub handle: HANDLE

@@ -8,6 +8,7 @@ description = "cross platform api for getting information on a running processes
 readme = "README.md"
 license = "MIT"
 build="build.rs"
+edition="2018"
 
 [dependencies]
 libc = "0.2"
@@ -16,7 +17,6 @@ proc-maps = "0.1.7"
 benfred-read-process-memory = "0.2.1"
 goblin = "0.4.1"
 memmap = "0.7.0"
-lazy_static = "1.4.0"
 regex = "1"
 
 [target.'cfg(target_os="macos")'.dependencies]
@@ -28,6 +28,7 @@ libproc = "0.9"
 nix="0.21"
 object = "0.24"
 addr2line = "0.15"
+lazy_static = "1.4.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = {version = "0.3", features = ["winbase", "consoleapi", "wincon", "handleapi", "timeapi", "processenv" ]}

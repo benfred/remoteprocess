@@ -3,6 +3,7 @@ mod procstat;
 mod ptrace;
 mod lock;
 
+use log::warn;
 use libc::{pid_t, lwpid_t};
 use read_process_memory::{CopyAddress, ProcessHandle};
 
