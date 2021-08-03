@@ -68,6 +68,7 @@ impl Process {
         let mut locks = Vec::new();
         let mut locked = std::collections::HashSet::new();
         let mut done = false;
+        let mut all_locks_failed = true;
 
         // we need to lock each invidual thread of the process, but
         // while we're doing this new threads could be created. keep
@@ -78,13 +79,28 @@ impl Process {
             for thread in self.threads()? {
                 let threadid = thread.id()?;
                 if !locked.contains(&threadid) {
-                    locks.push(thread.lock()?);
-                    locked.insert(threadid);
-                    done = false;
+                    match thread.lock() {
+                        Ok(lock) => {
+                            locks.push(lock);
+                            locked.insert(threadid);
+                            done = false;
+                            all_locks_failed = false;
+                        }
+                        Err(Error::NixError(nix::errno::Errno::ESRCH)) => {
+                            // the thread probably exited before we could get a lock
+                            continue;
+                        }
+                        Err(e) => return Err(e),
+                    }
                 }
             }
         }
-        Ok(Lock{locks})
+
+        if all_locks_failed {
+            return Err(Error::Other(format!("All threads failed to lock")));
+        }
+
+        Ok(Lock { locks })
     }
 
     pub fn threads(&self) -> Result<Vec<Thread>, Error> {
