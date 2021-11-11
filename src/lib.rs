@@ -50,7 +50,6 @@
 //!     Ok(())
 //! }
 //! ```
-extern crate benfred_read_process_memory as read_process_memory;
 
 #[cfg(target_os="macos")]
 mod osx;
