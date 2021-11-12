@@ -48,10 +48,10 @@ impl Symbolicator {
             // TODO: probably also want to check if the filename/size is the same
             let address_key = (m.start() + m.size()) as u64;
             if self.binaries.contains_key(&address_key) {
-                debug!("skipping {}", filename);
+                debug!("skipping {}", filename.display());
                 continue;
             }
-            info!("loading debug info from {}", filename);
+            info!("loading debug info from {}", filename.display());
 
             // Memory-map the file, special casing [vdso] regions
             let file;
@@ -62,26 +62,26 @@ impl Symbolicator {
                 file = File::open(Path::new(filename))?;
                 mmapped_file = unsafe { Mmap::map(&file)? };
                 &mmapped_file[..]
-            } else if filename != "[vsyscall]" {
+            } else if filename != std::path::PathBuf::from("[vsyscall]") {
                 // if the filename doesn't exist, its' almost certainly the vdso section
                 // read from the the target processses memory
                 vdso_data = self.process.copy(m.start(), m.size())?;
                 &vdso_data
             } else {
                 // vsyscall region, can be ignored, but lets not keep on trying to do this
-                info!("skipping {} region", filename);
+                info!("skipping {} region", filename.display());
 
                 // insert a stub for [vsyscall] so that we don't continually try to load it etc
                 self.binaries.insert(address_key,
                         BinaryInfo{offset: 0, address: m.start() as u64, size: m.size() as u64,
-                                   filename: filename.to_string(), symbols: RefCell::new(None)});
+                                   filename: filename.display().to_string(), symbols: RefCell::new(None)});
                 continue;
             };
 
-            debug!("loading file {} 0x{:X} 0x{:X}", filename, m.start(), buffer.len());
+            debug!("loading file {} 0x{:X} 0x{:X}", filename.display(), m.start(), buffer.len());
             match goblin::Object::parse(&buffer) {
                 Ok(goblin::Object::Elf(elf)) => {
-                    trace!("filename {} elf {:#?}", filename, elf);
+                    trace!("filename {} elf {:#?}", filename.display(), elf);
 
                     let program_header = elf.program_headers
                         .iter()
@@ -93,13 +93,13 @@ impl Symbolicator {
                             // (https://github.com/benfred/py-spy/issues/183)
                             if hdr.p_vaddr > m.start() as u64 {
                                 warn!("Failed to load {} for symbols: v_addr {} is past start {}",
-                                    filename, hdr.p_vaddr, m.start());
+                                    filename.display(), hdr.p_vaddr, m.start());
                                 continue;
                             }
                             m.start() as u64 - hdr.p_vaddr
                         },
                         None => {
-                            warn!("Failed to find exectuable PT_LOAD header in {}", filename);
+                            warn!("Failed to find exectuable PT_LOAD header in {}", filename.display());
                             continue;
                         }
                     };
@@ -108,14 +108,14 @@ impl Symbolicator {
                     // based lookup of the binary
                     self.binaries.insert(address_key,
                         BinaryInfo{offset: obj_base, address: m.start() as u64, size: m.size() as u64,
-                                   filename: filename.to_string(), symbols: RefCell::new(None)});
+                                   filename: filename.display().to_string(), symbols: RefCell::new(None)});
                 },
                 Ok(_) => {
-                    warn!("unknown binary type for {}", filename);
+                    warn!("unknown binary type for {}", filename.display());
                     continue;
                 }
                 Err(e) => {
-                    warn!("Failed to parse {}: {:?}", filename, e);
+                    warn!("Failed to parse {}: {:?}", filename.display(), e);
                     continue;
                 }
             }
