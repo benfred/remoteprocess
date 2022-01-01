@@ -60,7 +60,7 @@ extern "system" {
 
 impl Process {
     pub fn new(pid: Pid) -> Result<Process, Error> {
-        // we can't just use try_into_prcess_handle here because we need some additional permissions
+        // we can't just use try_into_process_handle here because we need some additional permissions
         unsafe {
             let handle = OpenProcess(PROCESS_VM_READ | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION
                                      | THREAD_QUERY_INFORMATION | THREAD_GET_CONTEXT, FALSE, pid);
