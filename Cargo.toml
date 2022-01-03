@@ -8,7 +8,7 @@ description = "cross platform api for getting information on a running processes
 readme = "README.md"
 license = "MIT"
 build="build.rs"
-edition="2018"
+edition="2021"
 
 [dependencies]
 libc = "0.2"
