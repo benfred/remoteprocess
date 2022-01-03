@@ -24,7 +24,7 @@ impl Unwinder {
     }
 
     pub fn cursor(&self, thread: &Thread) -> Result<Cursor, Error> {
-        Cursor::new(thread.thread.0, self.handle)
+        Cursor::new(*thread.thread, self.handle)
     }
 }
 
