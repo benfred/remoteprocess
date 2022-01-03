@@ -23,10 +23,12 @@ fn main() {
                     std::fs::copy(format!("/usr/local/musl/{}/lib/libunwind.a", target), format!("{}/libunwind-remoteprocess.a", out_dir)).unwrap();
                     std::fs::copy(format!("/usr/local/musl/{}/lib/libunwind-ptrace.a", target), format!("{}/libunwind-ptrace.a", out_dir)).unwrap();
                     std::fs::copy(format!("/usr/local/musl/{}/lib/libunwind-{}.a", target, target_arch), format!("{}/libunwind-{}.a", out_dir, target_arch)).unwrap();
+                    std::fs::copy(format!("/usr/local/musl/{}/lib/libz.a", target), format!("{}/libz.a", out_dir)).unwrap();
                     println!("cargo:rustc-link-search=native={}", out_dir);
                     println!("cargo:rustc-link-lib=static=unwind-remoteprocess");
                     println!("cargo:rustc-link-lib=static=unwind-ptrace");
                     println!("cargo:rustc-link-lib=static=unwind-{}", target_arch);
+                    println!("cargo:rustc-link-lib=static=z");
                 } else {
                     println!("cargo:rustc-link-lib=dylib=unwind");
                     println!("cargo:rustc-link-lib=dylib=unwind-ptrace");
