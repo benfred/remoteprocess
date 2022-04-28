@@ -5,7 +5,6 @@ use winapi::um::winnt::{ACCESS_MASK, MAXIMUM_ALLOWED, PROCESS_QUERY_INFORMATION,
 use winapi::shared::minwindef::{FALSE, DWORD, MAX_PATH, ULONG};
 use winapi::shared::ntdef::PUNICODE_STRING;
 use winapi::um::winbase::QueryFullProcessImageNameW;
-use winapi::um::winnt::OSVERSIONINFOEXW;
 use std::ffi::OsString;
 use std::os::windows::ffi::{OsStringExt};
 use winapi::shared::ntdef::{PVOID, NTSTATUS, USHORT, VOID, NULL};
@@ -20,9 +19,7 @@ use super::Error;
 mod unwinder;
 #[cfg(feature="unwind")]
 mod symbolication;
-mod syscalls_x64;
 
-use self::syscalls_x64::{Syscall, lookup_syscall};
 #[cfg(feature="unwind")]
 pub use self::unwinder::Unwinder;
 #[cfg(feature="unwind")]
@@ -41,13 +38,6 @@ extern "system" {
     fn RtlNtStatusToDosError(status: NTSTATUS) -> ULONG;
     fn NtSuspendProcess(process: HANDLE) -> NTSTATUS;
     fn NtResumeProcess(process: HANDLE) -> NTSTATUS;
-
-    // using GetVersion/GetVersionEx from processthreadsapi returns incorrect information after win 8.1,
-    // unless we provide a application manifest file, which is currently not fully supported w/ rust
-    // https://github.com/rust-lang/rfcs/issues/721
-    // https://stackoverflow.com/questions/17399302/how-can-i-detect-windows-8-1-in-a-desktop-application
-    // hack around this by using RtlGetVersion instead
-    fn RtlGetVersion(lpVersionInformation: &mut OSVERSIONINFOEXW) -> NTSTATUS;
 
     fn NtQueryInformationThread(thread: HANDLE, info_class: u32, info: PVOID, info_len: ULONG, ret_len: * mut ULONG) -> NTSTATUS;
     fn NtQueryInformationProcess(process: HANDLE, info_class: u32, info: PVOID, info_len: ULONG, ret_len: * mut ULONG) -> NTSTATUS;
@@ -225,34 +215,8 @@ impl Thread {
                 return Ok(true);
             }
 
-            // Get the major/minor/build version of the current windows systems
-            let mut os_info = std::mem::zeroed::<OSVERSIONINFOEXW>();
-            os_info.dwOSVersionInfoSize = std::mem::size_of::<OSVERSIONINFOEXW>() as DWORD;
-            if RtlGetVersion(&mut os_info) != 0 {
-                return Err(Error::from(std::io::Error::from_raw_os_error(RtlNtStatusToDosError(ret) as i32)));
-            }
-
-            // TODO: blocked IO comes up as active here too (like prompt_toolkit\eventloop\inputhook.py)
-            // should we also check the IO Pending flag? Or add NTReadFile as 'idle' ?
-
-            // resolve the syscallnumber, and check if the thread is waiting
-            let active = match lookup_syscall(os_info.dwMajorVersion,
-                                              os_info.dwMinorVersion,
-                                              os_info.dwBuildNumber,
-                                              data.syscall_number.into()) {
-                Some(Syscall::NtWaitForAlertByThreadId) => false,
-                Some(Syscall::NtWaitForDebugEvent) => false,
-                Some(Syscall::NtWaitForKeyedEvent) => false,
-                Some(Syscall::NtWaitForMultipleObjects) => false,
-                Some(Syscall::NtWaitForMultipleObjects32) => false,
-                Some(Syscall::NtWaitForSingleObject) => false,
-                Some(Syscall::NtWaitForWnfNotifications) => false,
-                Some(Syscall::NtWaitForWorkViaWorkerFactory) => false,
-                Some(Syscall::NtWaitHighEventPair) => false,
-                Some(Syscall::NtWaitLowEventPair) => false,
-                _ => true
-            };
-            Ok(active)
+            // otherwise assume we're idle
+            Ok(false)
         }
     }
 }
