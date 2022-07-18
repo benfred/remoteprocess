@@ -27,7 +27,7 @@ libproc = "0.12"
 [target.'cfg(target_os="linux")'.dependencies]
 nix="0.24"
 object = "0.27"
-addr2line = "0.17"
+addr2line = "0.18"
 lazy_static = "1.4.0"
 
 [target.'cfg(windows)'.dependencies]
