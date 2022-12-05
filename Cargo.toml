@@ -13,9 +13,9 @@ edition="2021"
 [dependencies]
 libc = "0.2"
 log = "0.4"
-proc-maps = "0.2.1"
-read-process-memory = "0.1.4"
-goblin = "0.5.3"
+proc-maps = "0.3.0"
+read-process-memory = "0.1.5"
+goblin = "0.6.0"
 memmap = "0.7.0"
 regex = ">=1.6.0"
 
@@ -26,8 +26,8 @@ libproc = "0.12"
 
 [target.'cfg(target_os="linux")'.dependencies]
 nix = {version = "0.25", default-features = false, features = ["ptrace", "sched", "signal"]}
-object = "0.29"
-addr2line = "0.18"
+object = "0.30"
+addr2line = "0.19"
 lazy_static = "1.4.0"
 
 [target.'cfg(windows)'.dependencies]
