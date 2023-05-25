@@ -223,7 +223,7 @@ impl SymbolData {
             let error_handler = |e| Error::Other(format!("addr2line error: {:?}", e));
 
             // if we have debugging info, get the appropiate stack frames for the adresss
-            let mut frames = self.ctx.find_frames(offset).map_err(error_handler)?;
+            let mut frames = self.ctx.find_frames(offset).skip_all_loads().map_err(error_handler)?;
             while let Some(frame) = frames.next().map_err(error_handler)? {
                 has_debug_info = true;
                 if let Some(func) = frame.function {
