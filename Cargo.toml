@@ -15,19 +15,19 @@ libc = "0.2"
 log = "0.4"
 proc-maps = "0.3.0"
 read-process-memory = "0.1.5"
-goblin = "0.6.0"
+goblin = "0.6.1"
 memmap = "0.7.0"
 regex = ">=1.6.0"
 
 [target.'cfg(target_os="macos")'.dependencies]
 mach_o_sys = "0.1.1"
 mach = "0.3.2"
-libproc = "0.12"
+libproc = "0.13"
 
 [target.'cfg(target_os="linux")'.dependencies]
 nix = {version = "0.26", default-features = false, features = ["ptrace", "sched", "signal"]}
-object = "0.30"
-addr2line = "0.19"
+object = "0.31"
+addr2line = "0.20"
 lazy_static = "1.4.0"
 
 [target.'cfg(windows)'.dependencies]
