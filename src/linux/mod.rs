@@ -263,13 +263,14 @@ impl Drop for Namespace {
 }
 
 fn get_active_status(stat: &[u8]) -> Option<u8> {
-    // find the first ')' character, and return the active status
-    // field which comes after it
-    let mut iter = stat.iter().skip_while(|x| **x != b')');
-    match (iter.next(), iter.next(), iter.next()) {
-        (Some(b')'), Some(b' '), ret) => ret.map(|x| *x),
-        _ => None
+    // find the last ')' character, and return the active status field which
+    // comes after it.  The comm field itself can contain `)`, so we have to be
+    // greedy, looking for the last `)` in the line.
+    lazy_static! {
+        static ref RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?-u)^\d+ \(.+\) (\w)").unwrap();
     }
+    let caps = RE.captures(stat)?;
+    Some(caps.get(1)?.as_bytes()[0])
 }
 
 fn get_parent_pid(pid: Pid) -> Result<Pid, Error> {
@@ -281,7 +282,7 @@ fn get_parent_pid(pid: Pid) -> Result<Pid, Error> {
 
 fn get_ppid_status(stat: &[u8]) -> Option<Pid> {
     lazy_static! {
-        static ref RE: regex::bytes::Regex = regex::bytes::Regex::new(r"^\d+ \(.+\) \w (\d+)").unwrap();
+        static ref RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?-u)^\d+ \(.+\) \w (\d+)").unwrap();
     }
     let caps = RE.captures(stat)?;
     std::str::from_utf8(caps.get(1)?.as_bytes()).ok()?.parse::<Pid>().ok()
@@ -297,6 +298,10 @@ fn test_parse_active_stat() {
     assert_eq!(get_active_status(b"1234 (bash)S"), None);
     assert_eq!(get_active_status(b"1234)SSSS"), None);
     assert_eq!(get_active_status(b"15379 (ipython) t 9898 15379 9898 34816"), Some(b't'));
+    // comm may itself contain `)`:
+    assert_eq!(get_active_status(b"83 (Thre.(<lambda>)) S 1 19"), Some(b'S'));
+    // Invalid UTF-8 and whitespace:
+    assert_eq!(get_active_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(b'R'));
 }
 
 
@@ -310,4 +315,8 @@ fn test_parse_ppid_stat() {
     assert_eq!(get_ppid_status(b"1234 (bash)S"), None);
     assert_eq!(get_ppid_status(b"1234)SSSS"), None);
     assert_eq!(get_ppid_status(b"15379 (ipython) t 9898 15379 9898 34816"), Some(9898));
+    // comm may itself contain `)`:
+    assert_eq!(get_ppid_status(b"83 (Thre.(<lambda>)) S 1 19"), Some(1));
+    // Invalid UTF-8 and whitespace:
+    assert_eq!(get_ppid_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(1));
 }
