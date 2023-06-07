@@ -1,31 +1,34 @@
-use std::fs::File;
-use std::path::Path;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::path::Path;
 
-use log::{info, error, warn, debug, trace};
+use log::{debug, error, info, trace, warn};
 use memmap;
 use memmap::Mmap;
 
-use object::{self, Object, ObjectSymbol};
+use crate::{Error, Pid, Process, StackFrame};
 use addr2line::ObjectContext;
 use goblin;
 use goblin::elf::program_header::*;
-use crate::{StackFrame, Error, Process, Pid };
+use object::{self, Object, ObjectSymbol};
 
 use crate::ProcessMemory;
-
 
 pub struct Symbolicator {
     binaries: BTreeMap<u64, BinaryInfo>,
     process: Process,
-    pid: Pid
+    pid: Pid,
 }
 
 impl Symbolicator {
     pub fn new(pid: Pid) -> Result<Symbolicator, Error> {
         let process = Process::new(pid)?;
-        let mut ret = Symbolicator{binaries: BTreeMap::new(), process, pid};
+        let mut ret = Symbolicator {
+            binaries: BTreeMap::new(),
+            process,
+            pid,
+        };
         ret.reload()?;
         Ok(ret)
     }
@@ -35,14 +38,16 @@ impl Symbolicator {
 
         // Get shared libraries from virtual memory mapped files
         let maps = &proc_maps::get_process_maps(self.pid)?;
-        let shared_maps = maps.iter().filter(|m| m.is_exec() && !m.is_write() && m.is_read());
+        let shared_maps = maps
+            .iter()
+            .filter(|m| m.is_exec() && !m.is_write() && m.is_read());
 
         // Open them up and parse etc
         for m in shared_maps {
             // Get the filename if it exists from the map
             let filename = match m.filename() {
                 Some(f) => f,
-                None => continue
+                None => continue,
             };
 
             // TODO: probably also want to check if the filename/size is the same
@@ -64,7 +69,7 @@ impl Symbolicator {
                 &mmapped_file[..]
             } else if filename != std::path::PathBuf::from("[vsyscall]") {
                 // if the filename doesn't exist, its' almost certainly the vdso section
-                // read from the the target processses memory
+                // read from the the target processes memory
                 vdso_data = self.process.copy(m.start(), m.size())?;
                 &vdso_data
             } else {
@@ -72,18 +77,31 @@ impl Symbolicator {
                 info!("skipping {} region", filename.display());
 
                 // insert a stub for [vsyscall] so that we don't continually try to load it etc
-                self.binaries.insert(address_key,
-                        BinaryInfo{offset: 0, address: m.start() as u64, size: m.size() as u64,
-                                   filename: filename.display().to_string(), symbols: RefCell::new(None)});
+                self.binaries.insert(
+                    address_key,
+                    BinaryInfo {
+                        offset: 0,
+                        address: m.start() as u64,
+                        size: m.size() as u64,
+                        filename: filename.display().to_string(),
+                        symbols: RefCell::new(None),
+                    },
+                );
                 continue;
             };
 
-            debug!("loading file {} 0x{:X} 0x{:X}", filename.display(), m.start(), buffer.len());
+            debug!(
+                "loading file {} 0x{:X} 0x{:X}",
+                filename.display(),
+                m.start(),
+                buffer.len()
+            );
             match goblin::Object::parse(&buffer) {
                 Ok(goblin::Object::Elf(elf)) => {
                     trace!("filename {} elf {:#?}", filename.display(), elf);
 
-                    let program_header = elf.program_headers
+                    let program_header = elf
+                        .program_headers
                         .iter()
                         .find(|ref header| header.p_type == PT_LOAD && header.p_flags & PF_X != 0);
 
@@ -92,24 +110,38 @@ impl Symbolicator {
                             // Don't panic if v_addr/start is messed up
                             // (https://github.com/benfred/py-spy/issues/183)
                             if hdr.p_vaddr > m.start() as u64 {
-                                warn!("Failed to load {} for symbols: v_addr {} is past start {}",
-                                    filename.display(), hdr.p_vaddr, m.start());
+                                warn!(
+                                    "Failed to load {} for symbols: v_addr {} is past start {}",
+                                    filename.display(),
+                                    hdr.p_vaddr,
+                                    m.start()
+                                );
                                 continue;
                             }
                             m.start() as u64 - hdr.p_vaddr
-                        },
+                        }
                         None => {
-                            warn!("Failed to find exectuable PT_LOAD header in {}", filename.display());
+                            warn!(
+                                "Failed to find executable PT_LOAD header in {}",
+                                filename.display()
+                            );
                             continue;
                         }
                     };
 
-                    // the map key is the end address of this filename, which lets us do a relatively efficent range
+                    // the map key is the end address of this filename, which lets us do a relatively efficient range
                     // based lookup of the binary
-                    self.binaries.insert(address_key,
-                        BinaryInfo{offset: obj_base, address: m.start() as u64, size: m.size() as u64,
-                                   filename: filename.display().to_string(), symbols: RefCell::new(None)});
-                },
+                    self.binaries.insert(
+                        address_key,
+                        BinaryInfo {
+                            offset: obj_base,
+                            address: m.start() as u64,
+                            size: m.size() as u64,
+                            filename: filename.display().to_string(),
+                            symbols: RefCell::new(None),
+                        },
+                    );
+                }
                 Ok(_) => {
                     warn!("unknown binary type for {}", filename.display());
                     continue;
@@ -123,7 +155,12 @@ impl Symbolicator {
         Ok(())
     }
 
-    pub fn symbolicate(&self, addr: u64, line_info: bool, callback: &mut dyn FnMut(&StackFrame)) -> Result<(), Error> {
+    pub fn symbolicate(
+        &self,
+        addr: u64,
+        line_info: bool,
+        callback: &mut dyn FnMut(&StackFrame),
+    ) -> Result<(), Error> {
         let binary = match self.get_binary(addr) {
             Some(binary) => binary,
             None => {
@@ -141,13 +178,25 @@ impl Symbolicator {
                 _ => {
                     // we probably failed to load the symbols (maybe goblin v0.15 dependency causing error
                     // in gimli/object crate). Rather than fail add a stub
-                    callback(&StackFrame{line: None, addr, function: None, filename: None, module: binary.filename.clone()});
+                    callback(&StackFrame {
+                        line: None,
+                        addr,
+                        function: None,
+                        filename: None,
+                        module: binary.filename.clone(),
+                    });
                     Ok(())
                 }
             }
         } else {
             // TODO: allow symbolication code to access vdso data
-            callback(&StackFrame{line: None, addr, function: None, filename: None, module: binary.filename.clone()});
+            callback(&StackFrame {
+                line: None,
+                addr,
+                function: None,
+                filename: None,
+                module: binary.filename.clone(),
+            });
             Ok(())
         }
     }
@@ -156,7 +205,7 @@ impl Symbolicator {
         match self.binaries.range(addr..).next() {
             Some((_, binary)) if binary.contains(addr) => Some(&binary),
             Some(_) => None,
-            _ => None
+            _ => None,
         }
     }
 }
@@ -167,7 +216,7 @@ pub struct SymbolData {
     offset: u64,
     symbols: Vec<(u64, u64, String)>,
     dynamic_symbols: Vec<(u64, u64, String)>,
-    filename: String
+    filename: String,
 }
 
 impl SymbolData {
@@ -179,14 +228,23 @@ impl SymbolData {
         let file = match object::File::parse(&*map) {
             Ok(f) => f,
             Err(e) => {
-                error!("failed to parse file for symbolication {}: {:?}", filename, e);
+                error!(
+                    "failed to parse file for symbolication {}: {:?}",
+                    filename, e
+                );
                 // return Err(gimli::Error::OffsetOutOfBounds.into());
-                return Err(Error::Other("Failed to parse file for symbolication".to_string()));
+                return Err(Error::Other(
+                    "Failed to parse file for symbolication".to_string(),
+                ));
             }
         };
 
-        let ctx = ObjectContext::new(&file)
-            .map_err(|e| Error::Other(format!("Failed to get symbol context for {}: {:?}", filename, e)))?;
+        let ctx = ObjectContext::new(&file).map_err(|e| {
+            Error::Other(format!(
+                "Failed to get symbol context for {}: {:?}",
+                filename, e
+            ))
+        })?;
 
         let mut symbols = Vec::new();
         for sym in file.symbols() {
@@ -203,11 +261,28 @@ impl SymbolData {
             }
         }
         dynamic_symbols.sort_unstable_by(|a, b| a.cmp(&b));
-        Ok(SymbolData{ctx, offset, dynamic_symbols, symbols, filename: filename.to_owned()})
+        Ok(SymbolData {
+            ctx,
+            offset,
+            dynamic_symbols,
+            symbols,
+            filename: filename.to_owned(),
+        })
     }
 
-    pub fn symbolicate(&self, addr: u64, line_info: bool, callback: &mut dyn FnMut(&StackFrame)) -> Result<(), Error> {
-        let mut ret = StackFrame{line:None, filename: None, function: None, addr, module: self.filename.clone()};
+    pub fn symbolicate(
+        &self,
+        addr: u64,
+        line_info: bool,
+        callback: &mut dyn FnMut(&StackFrame),
+    ) -> Result<(), Error> {
+        let mut ret = StackFrame {
+            line: None,
+            filename: None,
+            function: None,
+            addr,
+            module: self.filename.clone(),
+        };
 
         // get the address before relocations
         let offset = addr - self.offset;
@@ -222,8 +297,12 @@ impl SymbolData {
             // type alias is private. hack by re-mapping the error
             let error_handler = |e| Error::Other(format!("addr2line error: {:?}", e));
 
-            // if we have debugging info, get the appropiate stack frames for the adresss
-            let mut frames = self.ctx.find_frames(offset).skip_all_loads().map_err(error_handler)?;
+            // if we have debugging info, get the appropriate stack frames for the address
+            let mut frames = self
+                .ctx
+                .find_frames(offset)
+                .skip_all_loads()
+                .map_err(error_handler)?;
             while let Some(frame) = frames.next().map_err(error_handler)? {
                 has_debug_info = true;
                 if let Some(func) = frame.function {
@@ -239,7 +318,7 @@ impl SymbolData {
             }
 
             if has_debug_info {
-                return Ok(())
+                return Ok(());
             }
         }
 
@@ -247,7 +326,7 @@ impl SymbolData {
         if self.symbols.len() > 0 {
             let symbol = match self.symbols.binary_search_by(|sym| sym.0.cmp(&offset)) {
                 Ok(i) => &self.symbols[i],
-                Err(i) => &self.symbols[if i > 0 { i - 1 } else { 0 }]
+                Err(i) => &self.symbols[if i > 0 { i - 1 } else { 0 }],
             };
             if offset >= symbol.0 && offset < (symbol.0 + symbol.1) {
                 ret.function = Some(symbol.2.clone());
@@ -255,9 +334,12 @@ impl SymbolData {
         }
 
         if ret.function.is_none() && self.dynamic_symbols.len() > 0 {
-            let symbol = match self.dynamic_symbols.binary_search_by(|sym| sym.0.cmp(&offset)) {
+            let symbol = match self
+                .dynamic_symbols
+                .binary_search_by(|sym| sym.0.cmp(&offset))
+            {
                 Ok(i) => &self.dynamic_symbols[i],
-                Err(i) => &self.dynamic_symbols[if i > 0 { i - 1 } else { 0 }]
+                Err(i) => &self.dynamic_symbols[if i > 0 { i - 1 } else { 0 }],
             };
             if offset >= symbol.0 && offset < (symbol.0 + symbol.1) {
                 ret.function = Some(symbol.2.clone());
@@ -268,14 +350,13 @@ impl SymbolData {
     }
 }
 
-
 // Contains info for a binary on how to unwind/symbolicate a stack trace
 struct BinaryInfo {
     address: u64,
     size: u64,
     offset: u64,
     filename: String,
-    symbols: RefCell<Option<Result<SymbolData, Error>>>
+    symbols: RefCell<Option<Result<SymbolData, Error>>>,
 }
 
 impl BinaryInfo {

@@ -1,0 +1,12 @@
+repos:
+      - repo: https://github.com/codespell-project/codespell
+        rev: v2.2.4
+        hooks:
+        - id: codespell
+          exclude: (?x)^(ci/testdata.*|images.*)$
+          ignore_words_list: create
+      - repo: https://github.com/doublify/pre-commit-rust
+        rev: v1.0
+        hooks:
+        - id: fmt
+        - id: cargo-check

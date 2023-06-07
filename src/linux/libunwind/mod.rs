@@ -1,13 +1,15 @@
-use libc::{c_int, c_void, c_char, size_t, pid_t};
+use libc::{c_char, c_int, c_void, pid_t, size_t};
 use std;
 
-#[cfg_attr(target_arch="x86_64", path="bindings_x86_64.rs")]
-#[cfg_attr(target_arch="arm", path="bindings_arm.rs")]
+#[cfg_attr(target_arch = "x86_64", path = "bindings_x86_64.rs")]
+#[cfg_attr(target_arch = "arm", path = "bindings_arm.rs")]
 mod bindings;
 
-use self::bindings::{unw_addr_space_t, unw_cursor, unw_accessors_t, unw_cursor_t, unw_regnum_t, unw_word_t,
-                     unw_frame_regnum_t_UNW_REG_IP, unw_frame_regnum_t_UNW_REG_SP,
-                     unw_caching_policy_t, unw_caching_policy_t_UNW_CACHE_PER_THREAD};
+use self::bindings::{
+    unw_accessors_t, unw_addr_space_t, unw_caching_policy_t,
+    unw_caching_policy_t_UNW_CACHE_PER_THREAD, unw_cursor, unw_cursor_t,
+    unw_frame_regnum_t_UNW_REG_IP, unw_frame_regnum_t_UNW_REG_SP, unw_regnum_t, unw_word_t,
+};
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
@@ -21,13 +23,13 @@ pub enum Error {
     UNW_EBADFRAME,
     UNW_EINVAL,
     UNW_EBADVERSION,
-    UNW_ENOINFO
+    UNW_ENOINFO,
 }
 
 type Result<T> = std::result::Result<T, crate::Error>;
 
 pub struct Unwinder {
-    pub addr_space: unw_addr_space_t
+    pub addr_space: unw_addr_space_t,
 }
 
 impl Unwinder {
@@ -36,20 +38,23 @@ impl Unwinder {
             let addr_space = create_addr_space(&_UPT_accessors as *const _ as *mut _, 0);
             // enabling caching provides a modest speedup - but is still much slower than the gimli unwinding
             set_caching_policy(addr_space, unw_caching_policy_t_UNW_CACHE_PER_THREAD);
-            Ok(Unwinder{addr_space})
+            Ok(Unwinder { addr_space })
         }
     }
 
     pub fn cursor(&self, thread: &crate::Thread) -> Result<Cursor> {
-        unsafe
-        {
+        unsafe {
             let upt = _UPT_create(thread.id()? as _);
             let mut cursor = std::mem::MaybeUninit::uninit().assume_init();
             let ret = init_remote(&mut cursor, self.addr_space, upt);
             if ret != 0 {
                 return Err(crate::Error::LibunwindError(Error::from(-ret)));
             }
-            Ok(Cursor{cursor, upt, initial_frame: true})
+            Ok(Cursor {
+                cursor,
+                upt,
+                initial_frame: true,
+            })
         }
     }
 }
@@ -64,8 +69,8 @@ impl Drop for Unwinder {
 
 pub struct Cursor {
     cursor: unw_cursor,
-    upt: * mut c_void,
-    initial_frame: bool
+    upt: *mut c_void,
+    initial_frame: bool,
 }
 
 impl Cursor {
@@ -75,16 +80,16 @@ impl Cursor {
 
         match get_reg(cursor, register, &mut value) {
             0 => Ok(value as u64),
-            err => Err(crate::Error::LibunwindError(Error::from(-err)))
+            err => Err(crate::Error::LibunwindError(Error::from(-err))),
         }
     }
 
-    #[cfg(target_arch="x86_64")]
+    #[cfg(target_arch = "x86_64")]
     pub fn bx(&self) -> Result<u64> {
         unsafe { self.register(3) }
     }
 
-    #[cfg(target_arch="arm")]
+    #[cfg(target_arch = "arm")]
     pub fn r5(&self) -> Result<u64> {
         unsafe { self.register(5) }
     }
@@ -107,17 +112,19 @@ impl Cursor {
                 match get_proc_name(cursor, name.as_mut_ptr(), name.len(), &mut raw_offset) {
                     0 => break,
                     // TODO: use -UNW_ENOMEM or something instead
-                    -2 =>  {
+                    -2 => {
                         let new_length = name.len() * 2;
                         name.resize(new_length, 0);
                         continue;
-                    },
+                    }
                     err => {
                         return Err(crate::Error::LibunwindError(Error::from(-err)));
                     }
                 }
             }
-            Ok(std::ffi::CStr::from_ptr(name.as_ptr()).to_string_lossy().into_owned())
+            Ok(std::ffi::CStr::from_ptr(name.as_ptr())
+                .to_string_lossy()
+                .into_owned())
         }
     }
 }
@@ -132,7 +139,9 @@ impl Iterator for Cursor {
             unsafe {
                 match step(&mut self.cursor) {
                     0 => return None,
-                    err if err < 0 => return Some(Err(crate::Error::LibunwindError(Error::from(-err)))),
+                    err if err < 0 => {
+                        return Some(Err(crate::Error::LibunwindError(Error::from(-err))))
+                    }
                     _ => {}
                 }
             };
@@ -143,7 +152,7 @@ impl Iterator for Cursor {
         match self.ip() {
             Ok(0) => None,
             Ok(ip) => Some(Ok(ip)),
-            Err(e) => Some(Err(e))
+            Err(e) => Some(Err(e)),
         }
     }
 }
@@ -156,7 +165,7 @@ impl Drop for Cursor {
     }
 }
 
-extern {
+extern "C" {
     // functions in libunwind-ptrace.so
     fn _UPT_create(pid: pid_t) -> *mut c_void;
     fn _UPT_destroy(p: *mut c_void) -> c_void;
@@ -164,59 +173,74 @@ extern {
     static _UPT_accessors: unw_accessors_t;
 }
 
-#[cfg(target_arch="x86_64")]
-extern {
-    #[link_name="_Ux86_64_create_addr_space"]
+#[cfg(target_arch = "x86_64")]
+extern "C" {
+    #[link_name = "_Ux86_64_create_addr_space"]
     #[allow(improper_ctypes)]
     fn create_addr_space(acc: *mut unw_accessors_t, byteorder: c_int) -> unw_addr_space_t;
-    #[link_name="_Ux86_64_destroy_addr_space"]
+    #[link_name = "_Ux86_64_destroy_addr_space"]
     fn destroy_addr_space(addr: unw_addr_space_t) -> c_void;
-    #[link_name="_Ux86_64_init_remote"]
+    #[link_name = "_Ux86_64_init_remote"]
     fn init_remote(cursor: *mut unw_cursor_t, addr: unw_addr_space_t, ptr: *mut c_void) -> c_int;
-    #[link_name="_Ux86_64_get_reg"]
+    #[link_name = "_Ux86_64_get_reg"]
     fn get_reg(cursor: *mut unw_cursor_t, reg: unw_regnum_t, val: *mut unw_word_t) -> c_int;
-    #[link_name="_Ux86_64_step"]
+    #[link_name = "_Ux86_64_step"]
     fn step(cursor: *mut unw_cursor_t) -> c_int;
-    #[link_name="_Ux86_64_get_proc_name"]
-    fn get_proc_name(cursor: *mut unw_cursor, buffer: * mut c_char, len: size_t, offset: *mut unw_word_t) -> c_int;
-    #[link_name="_Ux86_64_set_caching_policy"]
+    #[link_name = "_Ux86_64_get_proc_name"]
+    fn get_proc_name(
+        cursor: *mut unw_cursor,
+        buffer: *mut c_char,
+        len: size_t,
+        offset: *mut unw_word_t,
+    ) -> c_int;
+    #[link_name = "_Ux86_64_set_caching_policy"]
     fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
 }
 
-#[cfg(target_arch="x86")]
-extern {
-     #[link_name="_Ux86_create_addr_space"]
+#[cfg(target_arch = "x86")]
+extern "C" {
+    #[link_name = "_Ux86_create_addr_space"]
     fn create_addr_space(acc: *mut unw_accessors_t, byteorder: c_int) -> unw_addr_space_t;
-    #[link_name="_Ux86_destroy_addr_space"]
+    #[link_name = "_Ux86_destroy_addr_space"]
     fn destroy_addr_space(addr: unw_addr_space_t) -> c_void;
-    #[link_name="_Ux86_init_remote"]
+    #[link_name = "_Ux86_init_remote"]
     fn init_remote(cursor: *mut unw_cursor_t, addr: unw_addr_space_t, ptr: *mut c_void) -> c_int;
-    #[link_name="_Ux86_get_reg"]
+    #[link_name = "_Ux86_get_reg"]
     fn get_reg(cursor: *mut unw_cursor_t, reg: unw_regnum_t, val: *mut unw_word_t) -> c_int;
-    #[link_name="_Ux86_step"]
+    #[link_name = "_Ux86_step"]
     fn step(cursor: *mut unw_cursor_t) -> c_int;
-    #[link_name="_Ux86_get_proc_name"]
-    fn get_proc_name(cursor: *mut unw_cursor, buffer: * mut c_char, len: size_t, offset: *mut unw_word_t) -> c_int;
-    #[link_name="_Ux86_set_caching_policy"]
+    #[link_name = "_Ux86_get_proc_name"]
+    fn get_proc_name(
+        cursor: *mut unw_cursor,
+        buffer: *mut c_char,
+        len: size_t,
+        offset: *mut unw_word_t,
+    ) -> c_int;
+    #[link_name = "_Ux86_set_caching_policy"]
     fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
 }
 
-#[cfg(target_arch="arm")]
-extern {
-    #[link_name="_Uarm_create_addr_space"]
+#[cfg(target_arch = "arm")]
+extern "C" {
+    #[link_name = "_Uarm_create_addr_space"]
     #[allow(improper_ctypes)]
     fn create_addr_space(acc: *mut unw_accessors_t, byteorder: c_int) -> unw_addr_space_t;
-    #[link_name="_Uarm_destroy_addr_space"]
+    #[link_name = "_Uarm_destroy_addr_space"]
     fn destroy_addr_space(addr: unw_addr_space_t) -> c_void;
-    #[link_name="_Uarm_init_remote"]
+    #[link_name = "_Uarm_init_remote"]
     fn init_remote(cursor: *mut unw_cursor_t, addr: unw_addr_space_t, ptr: *mut c_void) -> c_int;
-    #[link_name="_Uarm_get_reg"]
+    #[link_name = "_Uarm_get_reg"]
     fn get_reg(cursor: *mut unw_cursor_t, reg: unw_regnum_t, val: *mut unw_word_t) -> c_int;
-    #[link_name="_Uarm_step"]
+    #[link_name = "_Uarm_step"]
     fn step(cursor: *mut unw_cursor_t) -> c_int;
-    #[link_name="_Uarm_get_proc_name"]
-    fn get_proc_name(cursor: *mut unw_cursor, buffer: * mut c_char, len: size_t, offset: *mut unw_word_t) -> c_int;
-    #[link_name="_Uarm_set_caching_policy"]
+    #[link_name = "_Uarm_get_proc_name"]
+    fn get_proc_name(
+        cursor: *mut unw_cursor,
+        buffer: *mut c_char,
+        len: size_t,
+        offset: *mut unw_word_t,
+    ) -> c_int;
+    #[link_name = "_Uarm_set_caching_policy"]
     fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
 }
 
@@ -226,12 +250,16 @@ impl std::fmt::Display for Error {
             Error::UNW_EUNSPEC => write!(f, "UNW_EUNSPEC: unspecified (general) error"),
             Error::UNW_ENOMEM => write!(f, "UNW_ENOMEM: out of memoryr"),
             Error::UNW_EBADREG => write!(f, "UNW_EBADREG: bad register number"),
-            Error::UNW_EREADONLYREG => write!(f, "UNW_EREADONLYREG: attempt to write read-only register "),
+            Error::UNW_EREADONLYREG => {
+                write!(f, "UNW_EREADONLYREG: attempt to write read-only register ")
+            }
             Error::UNW_ESTOPUNWIND => write!(f, "UNW_ESTOPUNWIND: stop unwinding"),
             Error::UNW_EINVALIDIP => write!(f, "UNW_EINVALIDIP: invalid IP"),
             Error::UNW_EBADFRAME => write!(f, "UNW_EBADFRAME: bad frame"),
             Error::UNW_EINVAL => write!(f, "UNW_EINVAL: unsupported operation or bad value"),
-            Error::UNW_EBADVERSION => write!(f, "UNW_EBADVERSION: unwind info has unsupported version"),
+            Error::UNW_EBADVERSION => {
+                write!(f, "UNW_EBADVERSION: unwind info has unsupported version")
+            }
             Error::UNW_ENOINFO => write!(f, "UNW_ENOINFO: no unwind info found"),
         }
     }
@@ -261,7 +289,7 @@ impl Error {
             bindings::unw_error_t_UNW_EINVAL => Error::UNW_EINVAL,
             bindings::unw_error_t_UNW_EBADVERSION => Error::UNW_EBADVERSION,
             bindings::unw_error_t_UNW_ENOINFO => Error::UNW_ENOINFO,
-            _ => Error::UNW_EUNSPEC
+            _ => Error::UNW_EUNSPEC,
         }
     }
 }

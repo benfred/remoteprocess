@@ -7,7 +7,7 @@ extern "C" {
 }
 
 pub struct TaskLock {
-    task: mach_port_name_t
+    task: mach_port_name_t,
 }
 
 impl TaskLock {
@@ -16,20 +16,24 @@ impl TaskLock {
         if result != KERN_SUCCESS {
             return Err(std::io::Error::last_os_error());
         }
-        Ok(TaskLock{task})
+        Ok(TaskLock { task })
     }
 }
 impl Drop for TaskLock {
-    fn drop (&mut self) {
+    fn drop(&mut self) {
         let result = unsafe { mach::task::task_resume(self.task) };
         if result != KERN_SUCCESS {
-            error!("Failed to resume task {}: {}", self.task, std::io::Error::last_os_error());
+            error!(
+                "Failed to resume task {}: {}",
+                self.task,
+                std::io::Error::last_os_error()
+            );
         }
     }
 }
 
 pub struct ThreadLock {
-    thread: thread_act_t
+    thread: thread_act_t,
 }
 
 impl ThreadLock {
@@ -38,14 +42,18 @@ impl ThreadLock {
         if result != KERN_SUCCESS {
             return Err(std::io::Error::last_os_error());
         }
-        Ok(ThreadLock{thread})
+        Ok(ThreadLock { thread })
     }
 }
 impl Drop for ThreadLock {
-    fn drop (&mut self) {
+    fn drop(&mut self) {
         let result = unsafe { thread_resume(self.thread) };
         if result != KERN_SUCCESS {
-            error!("Failed to resume thread {}: {}", self.thread, std::io::Error::last_os_error());
+            error!(
+                "Failed to resume thread {}: {}",
+                self.thread,
+                std::io::Error::last_os_error()
+            );
         }
     }
 }

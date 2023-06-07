@@ -14,7 +14,7 @@ Features:
 - Listing all the threads in the process
 - Get all the child processes of the process
 - Figure out if a thread is active or not
-- Read memory from the other proceses (using read_proceses_memory crate)
+- Read memory from the other processes (using read_proceses_memory crate)
 
 By enabling the unwind feature you can also:
 
