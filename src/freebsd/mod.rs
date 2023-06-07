@@ -1,15 +1,15 @@
 mod kinfo_proc;
+mod lock;
 mod procstat;
 mod ptrace;
-mod lock;
 
-use libc::{pid_t, lwpid_t};
+use libc::{lwpid_t, pid_t};
 use read_process_memory::{CopyAddress, ProcessHandle};
 
 use std::convert::TryInto;
-use std::sync::{Arc, Weak, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
-use super::{ProcessMemory, Error};
+use super::{Error, ProcessMemory};
 use crate::freebsd::lock::ProcessLock;
 
 pub type Pid = pid_t;
@@ -27,11 +27,10 @@ pub struct Thread {
     lock: Arc<Mutex<Weak<ProcessLock>>>,
 }
 
-fn process_lock(pid: Pid, container: &Mutex<Weak<ProcessLock>>)
-                -> Result<Arc<ProcessLock>, Error> {
+fn process_lock(pid: Pid, container: &Mutex<Weak<ProcessLock>>) -> Result<Arc<ProcessLock>, Error> {
     let mut mutex_lock = container.lock().unwrap();
     if let Some(ref lock) = Weak::upgrade(&mutex_lock) {
-        return Ok(Arc::clone(lock))
+        return Ok(Arc::clone(lock));
     }
 
     let lock = Arc::new(ProcessLock::new(pid)?);
@@ -42,15 +41,16 @@ fn process_lock(pid: Pid, container: &Mutex<Weak<ProcessLock>>)
 
 impl Process {
     pub fn new(pid: Pid) -> Result<Process, Error> {
-        Ok(Process { pid, lock: Arc::new(Mutex::new(Weak::new())) })
+        Ok(Process {
+            pid,
+            lock: Arc::new(Mutex::new(Weak::new())),
+        })
     }
 
     pub fn exe(&self) -> Result<String, Error> {
         let filename = procstat::exe(self.pid)?;
         if filename.is_empty() {
-            return Err(
-                Error::Other("Failed to get process executable name".into())
-            );
+            return Err(Error::Other("Failed to get process executable name".into()));
         }
         Ok(filename)
     }
@@ -61,13 +61,11 @@ impl Process {
 
     pub fn threads(&self) -> Result<Vec<Thread>, Error> {
         let threads = procstat::threads_info(self.pid)?;
-        let result = threads.iter().map(|th| {
-            Thread {
-                tid: th.ki_tid,
-                active: th.ki_stat == 2,
-                pid: self.pid,
-                lock: Arc::clone(&self.lock),
-            }
+        let result = threads.iter().map(|th| Thread {
+            tid: th.ki_tid,
+            active: th.ki_stat == 2,
+            pid: self.pid,
+            lock: Arc::clone(&self.lock),
         });
 
         Ok(result.collect())
@@ -79,17 +77,26 @@ impl Process {
 
     pub fn cmdline(&self) -> Result<Vec<String>, Error> {
         unsafe {
-            let mib: [i32; 4] = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_ARGS, self.pid];
+            let mib: [i32; 4] = [
+                libc::CTL_KERN,
+                libc::KERN_PROC,
+                libc::KERN_PROC_ARGS,
+                self.pid,
+            ];
             let args: [u8; 65536] = std::mem::zeroed();
             let size: usize = std::mem::size_of_val(&args);
 
-            let ret = libc::sysctl(&mib as * const _ as * mut _, 4,
-                &args as * const _ as * mut _,
-                &size as *const _ as * mut _,
-                std::ptr::null_mut(), 0);
+            let ret = libc::sysctl(
+                &mib as *const _ as *mut _,
+                4,
+                &args as *const _ as *mut _,
+                &size as *const _ as *mut _,
+                std::ptr::null_mut(),
+                0,
+            );
 
             if ret < 0 {
-                return Err(Error::IOError(std::io::Error::last_os_error()))
+                return Err(Error::IOError(std::io::Error::last_os_error()));
             }
 
             let mut ret = Vec::new();
@@ -134,15 +141,14 @@ impl ProcessMemory for Process {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use log::warn;
     use libc::pid_t;
+    use log::warn;
 
+    use super::Error;
     use std::process::{Child, Command};
     use std::{thread, time};
-    use super::Error;
 
     use super::Process;
 
@@ -161,7 +167,7 @@ mod tests {
     /// We'll be tracing Perl programs, since Perl is
     /// installed by default.
     ///  This program spawns 2 threads, 1 active
-    const PERL_PROGRAM: &str =r#"
+    const PERL_PROGRAM: &str = r#"
           use threads;
           my $sleeping = async {  sleep; };
           my $running = async { while(true) {} };
@@ -172,9 +178,7 @@ mod tests {
     const EXECUTABLE: &str = "/usr/local/bin/perl";
     const CWD: &str = "/usr/local/share";
 
-    fn trace_perl_program(
-        program: &str
-    ) -> Result<(Process, DroppableProcess), Error> {
+    fn trace_perl_program(program: &str) -> Result<(Process, DroppableProcess), Error> {
         // Let's give perl some time.
         let wait_time = time::Duration::from_millis(50);
 
@@ -185,8 +189,10 @@ mod tests {
             .and_then(|child| {
                 let pid = child.id() as pid_t;
 
-                let result = (Process::new(pid).unwrap(),
-                              DroppableProcess { inner: child });
+                let result = (
+                    Process::new(pid).unwrap(),
+                    DroppableProcess { inner: child },
+                );
 
                 thread::sleep(wait_time);
 
@@ -201,13 +207,10 @@ mod tests {
             .and_then(|(process, _p)| process.threads())
             .expect("test failed!");
 
-        let active_count = threads.iter().filter(|x| {
-            x.active().unwrap()
-        }).count();
+        let active_count = threads.iter().filter(|x| x.active().unwrap()).count();
 
         assert_eq!(threads.len(), 3); // 1 main thread, 2 spawned.
         assert_eq!(active_count, 1);
-
     }
 
     #[test]
@@ -216,8 +219,7 @@ mod tests {
             .and_then(|(process, _p)| {
                 let threads = process.threads()?;
 
-                let active_thread =
-                    threads.iter().find(|x| x.active().unwrap());
+                let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                 assert!(active_thread.is_some());
 
@@ -226,16 +228,14 @@ mod tests {
 
                     let threads = process.threads()?;
 
-                    let active_thread =
-                        threads.iter().find(|x| x.active().unwrap());
+                    let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                     assert!(active_thread.is_none());
                 }
 
                 let threads = process.threads()?;
 
-                let active_thread =
-                    threads.iter().find(|x| x.active().unwrap());
+                let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                 assert!(active_thread.is_some());
 
@@ -251,7 +251,8 @@ mod tests {
                 assert_eq!(process.exe()?, EXECUTABLE);
 
                 Ok(())
-            }).unwrap();
+            })
+            .unwrap();
     }
 
     #[test]
@@ -261,9 +262,9 @@ mod tests {
                 assert_eq!(process.cwd()?, CWD);
 
                 Ok(())
-            }).unwrap();
+            })
+            .unwrap();
     }
-
 
     #[test]
     fn test_process_lock() {
@@ -271,8 +272,7 @@ mod tests {
             .and_then(|(process, _p)| {
                 let threads = process.threads()?;
 
-                let active_thread =
-                    threads.iter().find(|x| x.active().unwrap());
+                let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                 assert!(active_thread.is_some());
 
@@ -281,16 +281,14 @@ mod tests {
 
                     let threads = process.threads()?;
 
-                    let active_thread =
-                        threads.iter().find(|x| x.active().unwrap());
+                    let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                     assert!(active_thread.is_none());
                 }
 
                 let threads = process.threads()?;
 
-                let active_thread =
-                    threads.iter().find(|x| x.active().unwrap());
+                let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                 assert!(active_thread.is_some());
 
@@ -308,8 +306,7 @@ mod tests {
             .and_then(|(process, _p)| {
                 let threads = process.threads()?;
 
-                let active_thread =
-                    threads.iter().find(|x| x.active().unwrap());
+                let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                 assert!(active_thread.is_some());
 
@@ -319,8 +316,7 @@ mod tests {
 
                     let threads = process.threads()?;
 
-                    let active_thread =
-                        threads.iter().find(|x| x.active().unwrap());
+                    let active_thread = threads.iter().find(|x| x.active().unwrap());
 
                     assert!(active_thread.is_none());
                 }

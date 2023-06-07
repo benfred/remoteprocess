@@ -7,12 +7,17 @@ use lazy_static::lazy_static;
 use libc::pid_t;
 use log::{debug, info, warn};
 
-use nix::{self, sys::wait, sys::ptrace, {sched::{setns, CloneFlags}}};
+use nix::{
+    self,
+    sched::{setns, CloneFlags},
+    sys::ptrace,
+    sys::wait,
+};
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fs::File;
 use std::io::Read;
 use std::os::unix::io::AsRawFd;
-use std::fs::File;
 
 use super::Error;
 
@@ -33,12 +38,12 @@ pub struct Process {
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone)]
 pub struct Thread {
-    tid: nix::unistd::Pid
+    tid: nix::unistd::Pid,
 }
 
 impl Process {
     pub fn new(pid: Pid) -> Result<Process, Error> {
-        Ok(Process{pid})
+        Ok(Process { pid })
     }
 
     pub fn exe(&self) -> Result<String, Error> {
@@ -58,8 +63,10 @@ impl Process {
 
         let mut ret = Vec::new();
         for arg in buffer.split(|b| *b == 0).filter(|b| b.len() > 0) {
-            ret.push(String::from_utf8(arg.to_vec())
-                .map_err(|e| Error::Other(format!("Failed to convert utf8 {}", e)))?)
+            ret.push(
+                String::from_utf8(arg.to_vec())
+                    .map_err(|e| Error::Other(format!("Failed to convert utf8 {}", e)))?,
+            )
         }
         Ok(ret)
     }
@@ -70,7 +77,7 @@ impl Process {
         let mut done = false;
         let mut all_locks_failed = true;
 
-        // we need to lock each invidual thread of the process, but
+        // we need to lock each individual thread of the process, but
         // while we're doing this new threads could be created. keep
         // on creating new locks for each thread until no new locks are
         // created
@@ -112,11 +119,13 @@ impl Process {
             let filename = entry.file_name();
             let thread = match filename.to_str() {
                 Some(thread) => thread,
-                None => continue
+                None => continue,
             };
 
             if let Ok(threadid) = thread.parse::<i32>() {
-                ret.push(Thread{tid: nix::unistd::Pid::from_raw(threadid)});
+                ret.push(Thread {
+                    tid: nix::unistd::Pid::from_raw(threadid),
+                });
             }
         }
         Ok(ret)
@@ -147,7 +156,9 @@ impl super::ProcessMemory for Process {
 
 impl Thread {
     pub fn new(threadid: i32) -> Result<Thread, Error> {
-        Ok(Thread{tid: nix::unistd::Pid::from_raw(threadid)})
+        Ok(Thread {
+            tid: nix::unistd::Pid::from_raw(threadid),
+        })
     }
 
     pub fn lock(&self) -> Result<ThreadLock, Error> {
@@ -160,11 +171,14 @@ impl Thread {
 
     pub fn active(&self) -> Result<bool, Error> {
         let mut file = File::open(format!("/proc/{}/stat", self.tid))?;
-        let mut buf=[0u8; 512];
+        let mut buf = [0u8; 512];
         file.read(&mut buf)?;
         match get_active_status(&buf) {
             Some(stat) => Ok(stat == b'R'),
-            None => Err(Error::Other(format!("Failed to parse /proc/{}/stat", self.tid)))
+            None => Err(Error::Other(format!(
+                "Failed to parse /proc/{}/stat",
+                self.tid
+            ))),
         }
     }
 }
@@ -176,34 +190,36 @@ fn get_process_tree() -> Result<HashMap<Pid, Pid>, Error> {
         let filename = entry.file_name();
         let pid = match filename.to_str() {
             Some(pid) => pid,
-            None => continue
+            None => continue,
         };
         if let Ok(pid) = pid.parse::<Pid>() {
             match get_parent_pid(pid) {
-                Ok(ppid) => { ret.insert(pid, ppid) },
-                Err(_) => continue
+                Ok(ppid) => ret.insert(pid, ppid),
+                Err(_) => continue,
             };
         }
     }
     Ok(ret)
 }
 
-
 /// This locks a target process using ptrace, and prevents it from running while this
 /// struct is alive
 pub struct Lock {
     #[allow(dead_code)]
-    locks: Vec<ThreadLock>
+    locks: Vec<ThreadLock>,
 }
 
 pub struct ThreadLock {
-    tid: nix::unistd::Pid
+    tid: nix::unistd::Pid,
 }
 
 impl ThreadLock {
     fn new(tid: nix::unistd::Pid) -> Result<ThreadLock, nix::Error> {
         ptrace::attach(tid)?;
-        while let wait::WaitStatus::Stopped(_, sig) = wait::waitpid(tid, Some(wait::WaitPidFlag::WSTOPPED | wait::WaitPidFlag::__WALL))? {
+        while let wait::WaitStatus::Stopped(_, sig) = wait::waitpid(
+            tid,
+            Some(wait::WaitPidFlag::WSTOPPED | wait::WaitPidFlag::__WALL),
+        )? {
             if sig == nix::sys::signal::Signal::SIGSTOP {
                 break;
             }
@@ -213,7 +229,7 @@ impl ThreadLock {
         }
 
         debug!("attached to thread {}", tid);
-        Ok(ThreadLock{tid})
+        Ok(ThreadLock { tid })
     }
 }
 
@@ -227,7 +243,7 @@ impl Drop for ThreadLock {
 }
 
 pub struct Namespace {
-    ns_file: Option<File>
+    ns_file: Option<File>,
 }
 
 impl Namespace {
@@ -241,10 +257,12 @@ impl Namespace {
             // need to open this here, gets trickier after changing the namespace
             let self_ns = File::open("/proc/self/ns/mnt")?;
             setns(target.as_raw_fd(), CloneFlags::from_bits_truncate(0))?;
-            Ok(Namespace{ns_file: Some(self_ns)})
+            Ok(Namespace {
+                ns_file: Some(self_ns),
+            })
         } else {
             info!("Target process is running in same namespace - not changing");
-            Ok(Namespace{ns_file: None})
+            Ok(Namespace { ns_file: None })
         }
     }
 
@@ -267,7 +285,8 @@ fn get_active_status(stat: &[u8]) -> Option<u8> {
     // comes after it.  The comm field itself can contain `)`, so we have to be
     // greedy, looking for the last `)` in the line.
     lazy_static! {
-        static ref RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?-u)^\d+ \(.+\) (\w)").unwrap();
+        static ref RE: regex::bytes::Regex =
+            regex::bytes::Regex::new(r"(?-u)^\d+ \(.+\) (\w)").unwrap();
     }
     let caps = RE.captures(stat)?;
     Some(caps.get(1)?.as_bytes()[0])
@@ -275,17 +294,21 @@ fn get_active_status(stat: &[u8]) -> Option<u8> {
 
 fn get_parent_pid(pid: Pid) -> Result<Pid, Error> {
     let mut file = File::open(format!("/proc/{}/stat", pid))?;
-    let mut buf=[0u8; 512];
+    let mut buf = [0u8; 512];
     file.read(&mut buf)?;
     get_ppid_status(&buf).ok_or_else(|| Error::Other(format!("Failed to parse /proc/{}/stat", pid)))
 }
 
 fn get_ppid_status(stat: &[u8]) -> Option<Pid> {
     lazy_static! {
-        static ref RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?-u)^\d+ \(.+\) \w (\d+)").unwrap();
+        static ref RE: regex::bytes::Regex =
+            regex::bytes::Regex::new(r"(?-u)^\d+ \(.+\) \w (\d+)").unwrap();
     }
     let caps = RE.captures(stat)?;
-    std::str::from_utf8(caps.get(1)?.as_bytes()).ok()?.parse::<Pid>().ok()
+    std::str::from_utf8(caps.get(1)?.as_bytes())
+        .ok()?
+        .parse::<Pid>()
+        .ok()
 }
 
 #[test]
@@ -297,13 +320,18 @@ fn test_parse_active_stat() {
     assert_eq!(get_active_status(b")))"), None);
     assert_eq!(get_active_status(b"1234 (bash)S"), None);
     assert_eq!(get_active_status(b"1234)SSSS"), None);
-    assert_eq!(get_active_status(b"15379 (ipython) t 9898 15379 9898 34816"), Some(b't'));
+    assert_eq!(
+        get_active_status(b"15379 (ipython) t 9898 15379 9898 34816"),
+        Some(b't')
+    );
     // comm may itself contain `)`:
-    assert_eq!(get_active_status(b"83 (Thre.(<lambda>)) S 1 19"), Some(b'S'));
+    assert_eq!(
+        get_active_status(b"83 (Thread.(<lambda>)) S 1 19"),
+        Some(b'S')
+    );
     // Invalid UTF-8 and whitespace:
     assert_eq!(get_active_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(b'R'));
 }
-
 
 #[test]
 fn test_parse_ppid_stat() {
@@ -314,9 +342,12 @@ fn test_parse_ppid_stat() {
     assert_eq!(get_ppid_status(b")))"), None);
     assert_eq!(get_ppid_status(b"1234 (bash)S"), None);
     assert_eq!(get_ppid_status(b"1234)SSSS"), None);
-    assert_eq!(get_ppid_status(b"15379 (ipython) t 9898 15379 9898 34816"), Some(9898));
+    assert_eq!(
+        get_ppid_status(b"15379 (ipython) t 9898 15379 9898 34816"),
+        Some(9898)
+    );
     // comm may itself contain `)`:
-    assert_eq!(get_ppid_status(b"83 (Thre.(<lambda>)) S 1 19"), Some(1));
+    assert_eq!(get_ppid_status(b"83 (Thread.(<lambda>)) S 1 19"), Some(1));
     // Invalid UTF-8 and whitespace:
     assert_eq!(get_ppid_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(1));
 }

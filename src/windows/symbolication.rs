@@ -1,19 +1,21 @@
-use log::info;
 use libc::wcslen;
-use winapi::um::winnt::{HANDLE, WCHAR};
-use winapi::um::errhandlingapi::GetLastError;
-use winapi::shared::minwindef::{TRUE, BOOL, DWORD, MAX_PATH};
-use winapi::shared::guiddef::GUID;
+use log::info;
+use std::os::windows::ffi::OsStringExt;
 use winapi::shared::basetsd::DWORD64;
-use winapi::um::dbghelp::{SymInitializeW, SymCleanup,
-                          SymFromAddrW, SymGetLineFromAddrW64, MAX_SYM_NAME, SYMBOL_INFOW, IMAGEHLP_LINEW64};
-use std::os::windows::ffi::{OsStringExt};
+use winapi::shared::guiddef::GUID;
+use winapi::shared::minwindef::{BOOL, DWORD, MAX_PATH, TRUE};
+use winapi::um::dbghelp::{
+    SymCleanup, SymFromAddrW, SymGetLineFromAddrW64, SymInitializeW, IMAGEHLP_LINEW64,
+    MAX_SYM_NAME, SYMBOL_INFOW,
+};
+use winapi::um::errhandlingapi::GetLastError;
+use winapi::um::winnt::{HANDLE, WCHAR};
 
 use super::super::Error;
 use super::super::StackFrame;
 
 pub struct Symbolicator {
-    pub handle: HANDLE
+    pub handle: HANDLE,
 }
 
 impl Symbolicator {
@@ -22,28 +24,33 @@ impl Symbolicator {
             if SymInitializeW(handle, std::ptr::null_mut(), TRUE) == 0 {
                 return Err(Error::from(std::io::Error::last_os_error()));
             };
-            Ok(Symbolicator{handle})
+            Ok(Symbolicator { handle })
         }
     }
 
     pub fn reload(&mut self) -> Result<(), Error> {
         info!("reloading symbol module list");
-        unsafe { SymRefreshModuleList(self.handle); }
+        unsafe {
+            SymRefreshModuleList(self.handle);
+        }
         Ok(())
     }
 
-    pub fn symbolicate(&self, addr: u64, line_info: bool, callback: &mut dyn FnMut(&StackFrame)) -> Result<(), Error> {
+    pub fn symbolicate(
+        &self,
+        addr: u64,
+        line_info: bool,
+        callback: &mut dyn FnMut(&StackFrame),
+    ) -> Result<(), Error> {
         let function = unsafe { self.symbol_function(addr) };
 
-        let module = match unsafe { self.symbol_module (addr) } {
+        let module = match unsafe { self.symbol_module(addr) } {
             Ok(module) => module,
-            Err(Error::NoBinaryForAddress(_)) => {
-                unsafe {
-                    SymRefreshModuleList(self.handle);
-                    self.symbol_module(addr).unwrap_or_else(|_| "?".to_owned())
-                }
+            Err(Error::NoBinaryForAddress(_)) => unsafe {
+                SymRefreshModuleList(self.handle);
+                self.symbol_module(addr).unwrap_or_else(|_| "?".to_owned())
             },
-            Err(_) => "?".to_owned()
+            Err(_) => "?".to_owned(),
         };
 
         let mut line = None;
@@ -55,7 +62,13 @@ impl Symbolicator {
                 filename = Some(f);
             }
         }
-        callback(&StackFrame{function, filename, line, module, addr});
+        callback(&StackFrame {
+            function,
+            filename,
+            line,
+            module,
+            addr,
+        });
         Ok(())
     }
 
@@ -73,13 +86,16 @@ impl Symbolicator {
             return None;
         }
 
-        let length = std::cmp::min(symbol_info.NameLen as usize, symbol_info.MaxNameLen as usize - 1);
+        let length = std::cmp::min(
+            symbol_info.NameLen as usize,
+            symbol_info.MaxNameLen as usize - 1,
+        );
         let symbol = std::slice::from_raw_parts(symbol_info.Name.as_ptr() as *const u16, length);
         let symbol = std::ffi::OsString::from_wide(symbol);
         Some(symbol.to_string_lossy().to_owned().to_string())
     }
 
-    // get the corresponding filename/linke
+    // get the corresponding filename/link
     pub unsafe fn symbol_filename(&self, addr: u64) -> Option<(String, u64)> {
         let mut displacement = 0;
         let mut info = std::mem::zeroed::<IMAGEHLP_LINEW64>();
@@ -89,7 +105,10 @@ impl Symbolicator {
         }
         let filename = std::slice::from_raw_parts(info.FileName, wcslen(info.FileName));
         let filename = std::ffi::OsString::from_wide(filename);
-        Some((filename.to_string_lossy().to_owned().to_string(), info.LineNumber.into()))
+        Some((
+            filename.to_string_lossy().to_owned().to_string(),
+            info.LineNumber.into(),
+        ))
     }
 
     // get the corresponding module name
@@ -112,13 +131,15 @@ impl Symbolicator {
 
 impl Drop for Symbolicator {
     fn drop(&mut self) {
-        unsafe { SymCleanup(self.handle); }
+        unsafe {
+            SymCleanup(self.handle);
+        }
     }
 }
 
 #[repr(C, align(8))]
 struct SymbolBuffer {
-    buffer: [u8; std::mem::size_of::<SYMBOL_INFOW>() + MAX_SYM_NAME * 2]
+    buffer: [u8; std::mem::size_of::<SYMBOL_INFOW>() + MAX_SYM_NAME * 2],
 }
 
 // missing from winapi-rs =(
@@ -167,7 +188,7 @@ pub struct IMAGEHLP_MODULEW64 {
     pub Reserved: DWORD,
 }
 
-#[link(name="dbghelp")]
+#[link(name = "dbghelp")]
 extern "system" {
     fn SymGetModuleInfoW64(process: HANDLE, addr: u64, info: *mut IMAGEHLP_MODULEW64) -> BOOL;
     fn SymRefreshModuleList(process: HANDLE) -> BOOL;
