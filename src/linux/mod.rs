@@ -224,8 +224,19 @@ impl ThreadLock {
                 break;
             }
 
-            debug!("reinjecting non-SIGSTOP signal {} to {}", sig, tid);
-            ptrace::cont(tid, sig)?;
+            // There appears to be a potential race with a subprocess, where
+            // after the initial `PTRACE_ATTACH`, but before the process
+            // receives a `SIGSTOP`, it hits an execve and then triggers a
+            // `SIGTRAP`, which can cause the process to die.  Details on
+            // ptrace+execve at:
+            // https://man7.org/linux/man-pages/man2/ptrace.2.html#:~:text=execve(2)%20under%20ptrace
+            if sig == nix::sys::signal::Signal::SIGTRAP {
+                debug!("suppressing SIGTRAP signal to {}", tid);
+                ptrace::cont(tid, None)?;
+            } else {
+                debug!("reinjecting non-SIGSTOP signal {} to {}", sig, tid);
+                ptrace::cont(tid, sig)?;
+            }
         }
 
         debug!("attached to thread {}", tid);
