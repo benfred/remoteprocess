@@ -214,18 +214,53 @@ pub struct ThreadLock {
 }
 
 impl ThreadLock {
-    fn new(tid: nix::unistd::Pid) -> Result<ThreadLock, nix::Error> {
-        ptrace::attach(tid)?;
-        while let wait::WaitStatus::Stopped(_, sig) = wait::waitpid(
+    fn new(tid: nix::unistd::Pid) -> Result<ThreadLock, Error> {
+        // This attaches to the process w/o pausing it.
+        ptrace::seize(
             tid,
-            Some(wait::WaitPidFlag::WSTOPPED | wait::WaitPidFlag::__WALL),
-        )? {
-            if sig == nix::sys::signal::Signal::SIGSTOP {
-                break;
-            }
+            // Without this, it *appears* that the tracee can get stuck in the
+            // zombie state and our `waitpid` below will just hang.
+            ptrace::Options::PTRACE_O_TRACEEXIT,
+        )?;
 
-            debug!("reinjecting non-SIGSTOP signal {} to {}", sig, tid);
-            ptrace::cont(tid, sig)?;
+        // Pause the process using `interrupt`.  Unlike `attach`, this doesn't
+        // use `SIGSTOP` or cause execve to send a `SIGTRAP` and so avoids races
+        // with signals from foreign processes.
+        if let Err(e) = ptrace::interrupt(tid) {
+            if let Err(e) = ptrace::detach(tid, None) {
+                warn!("Failed to detach from thread {} for cleanup: {}", tid, e);
+            }
+            return Err(Error::NixError(e));
+        }
+
+        // Verify that the thread has stopped.
+        loop {
+            match wait::waitpid(
+                tid,
+                Some(wait::WaitPidFlag::WSTOPPED | wait::WaitPidFlag::__WALL),
+            )? {
+                // We only really expect to see a `PTRACE_EVENT_STOP`.
+                wait::WaitStatus::PtraceEvent(_, nix::sys::signal::Signal::SIGTRAP, event)
+                    if event == ptrace::Event::PTRACE_EVENT_STOP as i32 =>
+                {
+                    break
+                }
+                // However, experimentally, it appears we see an exit status when
+                // a process is dying.
+                wait::WaitStatus::Exited(_, _) => break,
+                // Just re-injecting other signals that aren't ours.
+                wait::WaitStatus::Stopped(_, sig) => {
+                    info!("reinjecting non-SIGSTOP signal {} to {}", sig, tid);
+                    ptrace::cont(tid, sig)?;
+                }
+                // Report an error on everything else.
+                status => {
+                    return Err(Error::Other(format!(
+                        "unexpected waitpid result {:?} to {}",
+                        status, tid
+                    )))
+                }
+            }
         }
 
         debug!("attached to thread {}", tid);
