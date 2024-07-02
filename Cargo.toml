@@ -31,7 +31,7 @@ addr2line = "0.21"
 lazy_static = "1.4.0"
 
 [target.'cfg(windows)'.dependencies]
-winapi = {version = "0.3", features = ["winbase", "consoleapi", "wincon", "handleapi", "timeapi", "processenv" ]}
+winapi = {version = "0.3", features = ["winbase", "consoleapi", "wincon", "handleapi", "timeapi", "processenv", "errhandlingapi" ]}
 
 [dev-dependencies]
 env_logger = "0.10"
