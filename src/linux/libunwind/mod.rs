@@ -3,6 +3,7 @@ use std;
 
 #[cfg_attr(target_arch = "x86_64", path = "bindings_x86_64.rs")]
 #[cfg_attr(target_arch = "arm", path = "bindings_arm.rs")]
+#[cfg_attr(target_arch = "aarch64", path = "bindings_aarch64.rs")]
 mod bindings;
 
 use self::bindings::{
@@ -45,7 +46,7 @@ impl Unwinder {
     pub fn cursor(&self, thread: &crate::Thread) -> Result<Cursor> {
         unsafe {
             let upt = _UPT_create(thread.id()? as _);
-            let mut cursor = std::mem::MaybeUninit::uninit().assume_init();
+            let mut cursor = std::mem::zeroed();
             let ret = init_remote(&mut cursor, self.addr_space, upt);
             if ret != 0 {
                 return Err(crate::Error::LibunwindError(Error::from(-ret)));
@@ -89,7 +90,7 @@ impl Cursor {
         unsafe { self.register(3) }
     }
 
-    #[cfg(target_arch = "arm")]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     pub fn r5(&self) -> Result<u64> {
         unsafe { self.register(5) }
     }
@@ -106,7 +107,7 @@ impl Cursor {
         unsafe {
             let mut name = vec![0_u8 as c_char; 128];
             let cursor = &self.cursor as *const _ as *mut _;
-            let mut raw_offset = std::mem::MaybeUninit::uninit().assume_init();
+            let mut raw_offset = std::mem::zeroed();
 
             loop {
                 match get_proc_name(cursor, name.as_mut_ptr(), name.len(), &mut raw_offset) {
@@ -241,6 +242,30 @@ extern "C" {
         offset: *mut unw_word_t,
     ) -> c_int;
     #[link_name = "_Uarm_set_caching_policy"]
+    fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
+}
+
+#[cfg(target_arch = "aarch64")]
+extern "C" {
+    #[link_name = "_Uaarch64_create_addr_space"]
+    #[allow(improper_ctypes)]
+    fn create_addr_space(acc: *mut unw_accessors_t, byteorder: c_int) -> unw_addr_space_t;
+    #[link_name = "_Uaarch64_destroy_addr_space"]
+    fn destroy_addr_space(addr: unw_addr_space_t) -> c_void;
+    #[link_name = "_Uaarch64_init_remote"]
+    fn init_remote(cursor: *mut unw_cursor_t, addr: unw_addr_space_t, ptr: *mut c_void) -> c_int;
+    #[link_name = "_Uaarch64_get_reg"]
+    fn get_reg(cursor: *mut unw_cursor_t, reg: unw_regnum_t, val: *mut unw_word_t) -> c_int;
+    #[link_name = "_Uaarch64_step"]
+    fn step(cursor: *mut unw_cursor_t) -> c_int;
+    #[link_name = "_Uaarch64_get_proc_name"]
+    fn get_proc_name(
+        cursor: *mut unw_cursor,
+        buffer: *mut c_char,
+        len: size_t,
+        offset: *mut unw_word_t,
+    ) -> c_int;
+    #[link_name = "_Uaarch64_set_caching_policy"]
     fn set_caching_policy(spc: unw_addr_space_t, policy: unw_caching_policy_t) -> c_int;
 }
 

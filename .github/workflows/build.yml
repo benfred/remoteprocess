@@ -58,7 +58,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build (unwind)
       run: cargo build --verbose --features unwind --examples
-      if: matrix.target == 'x86_64-musl'  || matrix.target == 'armv7-musleabihf'
+      if: matrix.target == 'x86_64-musl'  || matrix.target == 'armv7-musleabihf' || matrix.target == 'aarch64-musl'
     - name: Build (no-unwind)
       run: cargo build --verbose --examples
       if: matrix.target == 'i686-musl' || matrix.target == 'aarch64-musl'
