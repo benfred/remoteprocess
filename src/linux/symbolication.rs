@@ -4,8 +4,7 @@ use std::fs::File;
 use std::path::Path;
 
 use log::{debug, error, info, trace, warn};
-use memmap;
-use memmap::Mmap;
+use memmap2::Mmap;
 
 use crate::{Error, Pid, Process, StackFrame};
 use addr2line::ObjectContext;
@@ -224,7 +223,7 @@ impl SymbolData {
         info!("opening {} for symbols", filename);
 
         let file = File::open(filename)?;
-        let map = unsafe { memmap::Mmap::map(&file)? };
+        let map = unsafe { Mmap::map(&file)? };
         let file = match object::File::parse(&*map) {
             Ok(f) => f,
             Err(e) => {
