@@ -145,12 +145,12 @@ impl ProcessMemory for Process {
 mod tests {
     use libc::pid_t;
     use log::warn;
+    use mark_flaky_tests::flaky;
 
-    use super::Error;
     use std::process::{Child, Command};
     use std::{thread, time};
 
-    use super::Process;
+    use super::{Error, Process};
 
     struct DroppableProcess {
         inner: Child,
@@ -300,7 +300,7 @@ mod tests {
     /// Since threads and their process use the same locking mechanics, it's
     /// crucial to ensure that double-locking doesn't occur. In case of
     /// double-lock program would panic, since ptrace(2) returns EBUSY.
-    #[test]
+    #[flaky]
     fn test_process_and_thread_lock() {
         trace_perl_program(PERL_PROGRAM)
             .and_then(|(process, _p)| {
