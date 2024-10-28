@@ -44,9 +44,17 @@ impl Cursor {
                 addr.Offset = offset;
                 addr.Mode = AddrModeFlat;
             }
-            set_flat_addr(&mut frame.AddrStack, ctx.0.Rsp as u64);
-            set_flat_addr(&mut frame.AddrFrame, ctx.0.Rbp as u64);
-            set_flat_addr(&mut frame.AddrPC, ctx.0.Rip as u64);
+            cfg_if::cfg_if! {
+                if #[cfg(target_arch = "aarch64")] {
+                  set_flat_addr(&mut frame.AddrStack, ctx.0.Sp as u64);
+                  set_flat_addr(&mut frame.AddrFrame, ctx.0.u.s().Lr as u64);
+                  set_flat_addr(&mut frame.AddrPC, ctx.0.Pc as u64);
+                } else {
+                  set_flat_addr(&mut frame.AddrStack, ctx.0.Rsp as u64);
+                  set_flat_addr(&mut frame.AddrFrame, ctx.0.Rbp as u64);
+                  set_flat_addr(&mut frame.AddrPC, ctx.0.Rip as u64);
+                }
+            }
 
             Ok(Cursor {
                 ctx,
