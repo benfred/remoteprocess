@@ -17,7 +17,7 @@ fn main() {
             if env::var("CARGO_FEATURE_UNWIND").is_ok() {
                 println!("cargo:rustc-cfg=use_libunwind");
                 if env::var("CARGO_CFG_TARGET_ENV").unwrap() == "musl"
-                    && !env::var("CARGO_CFG_TARGET_FEATURE")
+                    && env::var("CARGO_CFG_TARGET_FEATURE")
                         .unwrap_or_default()
                         .contains("crt-static")
                 {
