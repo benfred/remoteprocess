@@ -15,7 +15,7 @@ libc = "0.2"
 log = "0.4"
 proc-maps = "0.4"
 read-process-memory = "0.1.6"
-goblin = "0.9"
+goblin = "0.10"
 regex = ">=1.8.3"
 cfg-if = "1.0.0"
 
