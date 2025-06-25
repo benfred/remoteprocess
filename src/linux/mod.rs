@@ -244,7 +244,11 @@ impl ThreadLock {
                     _,
                     nix::sys::signal::Signal::SIGTRAP | nix::sys::signal::Signal::SIGTSTP,
                     event,
-                ) if event == ptrace::Event::PTRACE_EVENT_STOP as i32 => break,
+                ) if event == ptrace::Event::PTRACE_EVENT_STOP as i32
+                    || event == ptrace::Event::PTRACE_EVENT_EXIT as i32 =>
+                {
+                    break
+                }
                 // However, experimentally, it appears we see an exit status when
                 // a process is dying.
                 wait::WaitStatus::Exited(_, _) => break,
