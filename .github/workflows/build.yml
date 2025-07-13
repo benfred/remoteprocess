@@ -82,6 +82,7 @@ jobs:
         box:
           - freebsd-14
     steps:
+      - uses: actions/checkout@v3
       - name: Display CPU info
         run: lscpu
       - name: Install VM tools
