@@ -1,4 +1,4 @@
-#[cfg(feature="unwind")]
+#[cfg(feature = "unwind")]
 fn get_backtrace(pid: remoteprocess::Pid) -> Result<(), remoteprocess::Error> {
     // Create a new handle to the process
     let process = remoteprocess::Process::new(pid)?;
@@ -8,7 +8,11 @@ fn get_backtrace(pid: remoteprocess::Pid) -> Result<(), remoteprocess::Error> {
     let unwinder = process.unwinder()?;
     let symbolicator = process.symbolicator()?;
     for thread in process.threads()?.iter() {
-        println!("Thread {} - {}", thread.id()?, if thread.active()? { "running" } else { "idle" });
+        println!(
+            "Thread {} - {}",
+            thread.id()?,
+            if thread.active()? { "running" } else { "idle" }
+        );
 
         // lock the thread to get a consistent snapshot (unwinding will fail otherwise)
         // Note: the thread will appear idle when locked, so we are calling
@@ -29,7 +33,7 @@ fn get_backtrace(pid: remoteprocess::Pid) -> Result<(), remoteprocess::Error> {
     Ok(())
 }
 
-#[cfg(feature="unwind")]
+#[cfg(feature = "unwind")]
 fn main() {
     env_logger::init();
 
@@ -46,7 +50,7 @@ fn main() {
     }
 }
 
-#[cfg(not(feature="unwind"))]
+#[cfg(not(feature = "unwind"))]
 fn main() {
     panic!("unwind not supported!");
 }

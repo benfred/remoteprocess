@@ -51,24 +51,24 @@
 //! }
 //! ```
 
-#[cfg(target_os="macos")]
+#[cfg(target_os = "macos")]
 mod osx;
-#[cfg(target_os="macos")]
+#[cfg(target_os = "macos")]
 pub use osx::*;
 
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 mod linux;
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 pub use linux::*;
 
-#[cfg(target_os="freebsd")]
+#[cfg(target_os = "freebsd")]
 mod freebsd;
-#[cfg(target_os="freebsd")]
+#[cfg(target_os = "freebsd")]
 pub use freebsd::*;
 
-#[cfg(target_os="windows")]
+#[cfg(target_os = "windows")]
 mod windows;
-#[cfg(target_os="windows")]
+#[cfg(target_os = "windows")]
 pub use windows::*;
 
 #[derive(Debug)]
@@ -79,7 +79,7 @@ pub enum Error {
     Other(String),
     #[cfg(use_libunwind)]
     LibunwindError(linux::libunwind::Error),
-    #[cfg(target_os="linux")]
+    #[cfg(target_os = "linux")]
     NixError(nix::Error),
 }
 
@@ -87,14 +87,18 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             Error::NoBinaryForAddress(addr) => {
-                write!(f, "No binary found for address 0x{:016x}. Try reloading.", addr)
-            },
+                write!(
+                    f,
+                    "No binary found for address 0x{:016x}. Try reloading.",
+                    addr
+                )
+            }
             Error::GoblinError(ref e) => e.fmt(f),
             Error::IOError(ref e) => e.fmt(f),
             Error::Other(ref e) => write!(f, "{}", e),
             #[cfg(use_libunwind)]
             Error::LibunwindError(ref e) => e.fmt(f),
-            #[cfg(target_os="linux")]
+            #[cfg(target_os = "linux")]
             Error::NixError(ref e) => e.fmt(f),
         }
     }
@@ -107,7 +111,7 @@ impl std::error::Error for Error {
             Error::IOError(ref e) => Some(e),
             #[cfg(use_libunwind)]
             Error::LibunwindError(ref e) => Some(e),
-            #[cfg(target_os="linux")]
+            #[cfg(target_os = "linux")]
             Error::NixError(ref e) => Some(e),
             _ => None,
         }
@@ -126,7 +130,7 @@ impl From<std::io::Error> for Error {
     }
 }
 
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 impl From<nix::Error> for Error {
     fn from(err: nix::Error) -> Error {
         Error::NixError(err)
@@ -146,14 +150,21 @@ pub struct StackFrame {
     pub filename: Option<String>,
     pub function: Option<String>,
     pub module: String,
-    pub addr: u64
+    pub addr: u64,
 }
 
 impl std::fmt::Display for StackFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let function = self.function.as_ref().map(String::as_str).unwrap_or("?");
         if let Some(filename) = self.filename.as_ref() {
-            write!(f, "0x{:016x} {} ({}:{})", self.addr, function, filename, self.line.unwrap_or(0))
+            write!(
+                f,
+                "0x{:016x} {} ({}:{})",
+                self.addr,
+                function,
+                filename,
+                self.line.unwrap_or(0)
+            )
         } else {
             write!(f, "0x{:016x} {} ({})", self.addr, function, self.module)
         }
@@ -187,9 +198,7 @@ pub trait ProcessMemory {
 
     /// Copies a series of bytes from another process into a vector of
     /// structures of type T.
-    fn copy_vec<T>(&self, addr: usize, length: usize)
-                       -> Result<Vec<T>, Error>
-    {
+    fn copy_vec<T>(&self, addr: usize, length: usize) -> Result<Vec<T>, Error> {
         let mut vec = self.copy(addr, length * std::mem::size_of::<T>())?;
         let capacity = vec.capacity() as usize / std::mem::size_of::<T>() as usize;
         let ptr = vec.as_mut_ptr() as *mut T;
@@ -210,10 +219,13 @@ impl ProcessMemory for LocalProcess {
     }
 }
 
-#[cfg(any(target_os="linux", target_os="windows", target_os="freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "windows", target_os = "freebsd"))]
 #[doc(hidden)]
 /// Filters pids to own include descendations of target_pid
-fn filter_child_pids(target_pid: Pid, processes: &std::collections::HashMap<Pid, Pid>) -> Vec<(Pid, Pid)> {
+fn filter_child_pids(
+    target_pid: Pid,
+    processes: &std::collections::HashMap<Pid, Pid>,
+) -> Vec<(Pid, Pid)> {
     let mut ret = Vec::new();
     for (child, parent) in processes.iter() {
         let mut current = *parent;
@@ -229,7 +241,7 @@ fn filter_child_pids(target_pid: Pid, processes: &std::collections::HashMap<Pid,
                     }
                     *pid
                 }
-                None => break
+                None => break,
             };
         }
     }
@@ -240,11 +252,14 @@ fn filter_child_pids(target_pid: Pid, processes: &std::collections::HashMap<Pid,
 pub mod tests {
     use super::*;
 
-    struct Point { x: i32, y: i64 }
+    struct Point {
+        x: i32,
+        y: i64,
+    }
 
     #[test]
     fn test_copy_pointer() {
-        let original = Point{x:15, y:25};
+        let original = Point { x: 15, y: 25 };
         let copy = LocalProcess.copy_pointer(&original).unwrap();
         assert_eq!(original.x, copy.x);
         assert_eq!(original.y, copy.y);
@@ -252,8 +267,10 @@ pub mod tests {
 
     #[test]
     fn test_copy_struct() {
-        let original = Point{x:10, y:20};
-        let copy: Point = LocalProcess.copy_struct(&original as *const Point as usize).unwrap();
+        let original = Point { x: 10, y: 20 };
+        let copy: Point = LocalProcess
+            .copy_struct(&original as *const Point as usize)
+            .unwrap();
         assert_eq!(original.x, copy.x);
         assert_eq!(original.y, copy.y);
     }

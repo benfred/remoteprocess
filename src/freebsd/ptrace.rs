@@ -1,8 +1,8 @@
-use libc::{c_int, pid_t, c_void, lwpid_t};
+use libc::{c_int, c_void, lwpid_t, pid_t};
 use libc::{PT_ATTACH, PT_DETACH};
 
-use std::{ptr};
 use std::io::Error;
+use std::ptr;
 
 macro_rules! ptrace {
     ($request:ident, $pid:expr, $addr:expr, $data:expr) => {
@@ -15,15 +15,12 @@ macro_rules! ptrace {
 
             ret
         }
-    }
+    };
 }
 
 extern "C" {
-    fn ptrace(request: c_int, pid: pid_t,
-              data: *const c_void,
-              count: c_int) -> c_int;
+    fn ptrace(request: c_int, pid: pid_t, data: *const c_void, count: c_int) -> c_int;
 }
-
 
 pub fn attach(tid: lwpid_t) -> Result<(), Error> {
     ptrace!(PT_ATTACH, tid, ptr::null(), 0);

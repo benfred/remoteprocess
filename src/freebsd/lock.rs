@@ -3,8 +3,8 @@ use log::error;
 
 use std::io::Error as IoError;
 
-use super::Error;
 use super::ptrace;
+use super::Error;
 
 #[derive(Debug)]
 pub struct ProcessLock {

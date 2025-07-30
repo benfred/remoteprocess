@@ -1,14 +1,14 @@
-use winapi::um::processthreadsapi::{GetThreadContext, };
-use winapi::um::winnt::{HANDLE, CONTEXT, IMAGE_FILE_MACHINE_AMD64};
+use winapi::um::processthreadsapi::GetThreadContext;
+use winapi::um::winnt::{CONTEXT, HANDLE, IMAGE_FILE_MACHINE_AMD64};
 
 use winapi::shared::minwindef::TRUE;
-use winapi::um::dbghelp::{StackWalk64, STACKFRAME64, AddrModeFlat, ADDRESS64};
+use winapi::um::dbghelp::{AddrModeFlat, StackWalk64, ADDRESS64, STACKFRAME64};
 
-use super::Thread;
 use super::super::Error;
+use super::Thread;
 
 pub struct Unwinder {
-    pub handle: HANDLE
+    pub handle: HANDLE,
 }
 
 pub struct Cursor {
@@ -20,7 +20,7 @@ pub struct Cursor {
 
 impl Unwinder {
     pub fn new(handle: HANDLE) -> Result<Unwinder, Error> {
-        Ok(Unwinder{handle})
+        Ok(Unwinder { handle })
     }
 
     pub fn cursor(&self, thread: &Thread) -> Result<Cursor, Error> {
@@ -44,29 +44,56 @@ impl Cursor {
                 addr.Offset = offset;
                 addr.Mode = AddrModeFlat;
             }
-            set_flat_addr(&mut frame.AddrStack, ctx.0.Rsp as u64);
-            set_flat_addr(&mut frame.AddrFrame, ctx.0.Rbp as u64);
-            set_flat_addr(&mut frame.AddrPC, ctx.0.Rip as u64);
+            cfg_if::cfg_if! {
+                if #[cfg(target_arch = "aarch64")] {
+                  set_flat_addr(&mut frame.AddrStack, ctx.0.Sp as u64);
+                  set_flat_addr(&mut frame.AddrFrame, ctx.0.u.s().Lr as u64);
+                  set_flat_addr(&mut frame.AddrPC, ctx.0.Pc as u64);
+                } else {
+                  set_flat_addr(&mut frame.AddrStack, ctx.0.Rsp as u64);
+                  set_flat_addr(&mut frame.AddrFrame, ctx.0.Rbp as u64);
+                  set_flat_addr(&mut frame.AddrPC, ctx.0.Rip as u64);
+                }
+            }
 
-            Ok(Cursor{ctx, frame, thread, process})
+            Ok(Cursor {
+                ctx,
+                frame,
+                thread,
+                process,
+            })
         }
     }
 
     fn unwind(&mut self) -> Result<Option<u64>, Error> {
         unsafe {
-            if StackWalk64(IMAGE_FILE_MACHINE_AMD64.into(), self.process, self.thread,
-                        &mut self.frame,
-                        &mut self.ctx.0 as *mut CONTEXT as *mut _,
-                        None, None, None, None) != TRUE {
+            if StackWalk64(
+                IMAGE_FILE_MACHINE_AMD64.into(),
+                self.process,
+                self.thread,
+                &mut self.frame,
+                &mut self.ctx.0 as *mut CONTEXT as *mut _,
+                None,
+                None,
+                None,
+                None,
+            ) != TRUE
+            {
                 return Ok(None);
             }
             Ok(Some(self.ip()))
         }
     }
 
-    pub fn ip(&self) -> u64 { self.frame.AddrPC.Offset }
-    pub fn sp(&self) -> u64 { self.frame.AddrStack.Offset }
-    pub fn bp(&self) -> u64 { self.frame.AddrFrame.Offset }
+    pub fn ip(&self) -> u64 {
+        self.frame.AddrPC.Offset
+    }
+    pub fn sp(&self) -> u64 {
+        self.frame.AddrStack.Offset
+    }
+    pub fn bp(&self) -> u64 {
+        self.frame.AddrFrame.Offset
+    }
 }
 
 impl Iterator for Cursor {

@@ -1,36 +1,39 @@
-use winapi::um::processthreadsapi::{OpenProcess, OpenThread, GetThreadId, SuspendThread, ResumeThread};
-use winapi::um::winnt::{ACCESS_MASK, MAXIMUM_ALLOWED, PROCESS_QUERY_INFORMATION,
-                        PROCESS_VM_READ, PROCESS_SUSPEND_RESUME, THREAD_QUERY_INFORMATION, THREAD_GET_CONTEXT, THREAD_ALL_ACCESS,
-                        WCHAR, HANDLE};
-use winapi::shared::minwindef::{FALSE, DWORD, MAX_PATH, ULONG};
-use winapi::shared::ntdef::PUNICODE_STRING;
-use winapi::um::winbase::QueryFullProcessImageNameW;
 use std::ffi::OsString;
-use std::os::windows::ffi::{OsStringExt};
-use winapi::shared::ntdef::{PVOID, NTSTATUS, USHORT, VOID, NULL};
+use std::os::windows::ffi::OsStringExt;
+use winapi::shared::minwindef::{DWORD, FALSE, MAX_PATH, ULONG};
+use winapi::shared::ntdef::PUNICODE_STRING;
+use winapi::shared::ntdef::{NTSTATUS, NULL, PVOID, USHORT, VOID};
+use winapi::um::processthreadsapi::{
+    GetThreadId, OpenProcess, OpenThread, ResumeThread, SuspendThread,
+};
+use winapi::um::winbase::QueryFullProcessImageNameW;
+use winapi::um::winnt::{
+    ACCESS_MASK, HANDLE, MAXIMUM_ALLOWED, PROCESS_QUERY_INFORMATION, PROCESS_SUSPEND_RESUME,
+    PROCESS_VM_READ, THREAD_ALL_ACCESS, THREAD_GET_CONTEXT, THREAD_QUERY_INFORMATION, WCHAR,
+};
 
-pub use read_process_memory::{Pid, ProcessHandle, CopyAddress};
+pub use read_process_memory::{CopyAddress, Pid, ProcessHandle};
 
 pub type Tid = Pid;
 
 use super::Error;
 
-#[cfg(feature="unwind")]
-mod unwinder;
-#[cfg(feature="unwind")]
+#[cfg(feature = "unwind")]
 mod symbolication;
+#[cfg(feature = "unwind")]
+mod unwinder;
 
-#[cfg(feature="unwind")]
-pub use self::unwinder::Unwinder;
-#[cfg(feature="unwind")]
+#[cfg(feature = "unwind")]
 pub use self::symbolication::Symbolicator;
+#[cfg(feature = "unwind")]
+pub use self::unwinder::Unwinder;
 
 pub struct Process {
     pub pid: Pid,
-    pub handle: ProcessHandle
+    pub handle: ProcessHandle,
 }
 
-#[link(name="ntdll")]
+#[link(name = "ntdll")]
 extern "system" {
     // using these undocumented api's seems to be the best way to suspend/resume a process
     // on windows (using the toolhelp32snapshot api to get threads doesn't seem practical tbh)
@@ -39,11 +42,36 @@ extern "system" {
     fn NtSuspendProcess(process: HANDLE) -> NTSTATUS;
     fn NtResumeProcess(process: HANDLE) -> NTSTATUS;
 
-    fn NtQueryInformationThread(thread: HANDLE, info_class: u32, info: PVOID, info_len: ULONG, ret_len: * mut ULONG) -> NTSTATUS;
-    fn NtQueryInformationProcess(process: HANDLE, info_class: u32, info: PVOID, info_len: ULONG, ret_len: * mut ULONG) -> NTSTATUS;
+    fn NtQueryInformationThread(
+        thread: HANDLE,
+        info_class: u32,
+        info: PVOID,
+        info_len: ULONG,
+        ret_len: *mut ULONG,
+    ) -> NTSTATUS;
+    fn NtQueryInformationProcess(
+        process: HANDLE,
+        info_class: u32,
+        info: PVOID,
+        info_len: ULONG,
+        ret_len: *mut ULONG,
+    ) -> NTSTATUS;
 
-    fn NtGetNextThread(process: HANDLE, thread: HANDLE, access: ACCESS_MASK, attritubes: ULONG, flags: ULONG, new_thread: *mut HANDLE) -> NTSTATUS;
-    fn NtGetNextProcess(process: HANDLE, access: ACCESS_MASK, attritubes: ULONG, flags: ULONG, new_process: *mut HANDLE) -> NTSTATUS;
+    fn NtGetNextThread(
+        process: HANDLE,
+        thread: HANDLE,
+        access: ACCESS_MASK,
+        attributes: ULONG,
+        flags: ULONG,
+        new_thread: *mut HANDLE,
+    ) -> NTSTATUS;
+    fn NtGetNextProcess(
+        process: HANDLE,
+        access: ACCESS_MASK,
+        attributes: ULONG,
+        flags: ULONG,
+        new_process: *mut HANDLE,
+    ) -> NTSTATUS;
 
 }
 
@@ -51,16 +79,28 @@ impl Process {
     pub fn new(pid: Pid) -> Result<Process, Error> {
         // we can't just use try_into_process_handle here because we need some additional permissions
         unsafe {
-            let handle = OpenProcess(PROCESS_VM_READ | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION
-                                     | THREAD_QUERY_INFORMATION | THREAD_GET_CONTEXT, FALSE, pid);
+            let handle = OpenProcess(
+                PROCESS_VM_READ
+                    | PROCESS_SUSPEND_RESUME
+                    | PROCESS_QUERY_INFORMATION
+                    | THREAD_QUERY_INFORMATION
+                    | THREAD_GET_CONTEXT,
+                FALSE,
+                pid,
+            );
             if handle == (0 as std::os::windows::io::RawHandle) {
                 return Err(Error::from(std::io::Error::last_os_error()));
             }
-            Ok(Process{pid, handle: handle.into()})
+            Ok(Process {
+                pid,
+                handle: handle.into(),
+            })
         }
     }
 
-    pub fn handle(&self) -> ProcessHandle { self.handle.clone() }
+    pub fn handle(&self) -> ProcessHandle {
+        self.handle.clone()
+    }
 
     pub fn exe(&self) -> Result<String, Error> {
         unsafe {
@@ -70,7 +110,9 @@ impl Process {
             if ret == 0 {
                 return Err(std::io::Error::last_os_error().into());
             }
-            Ok(OsString::from_wide(&filename[0..size as usize]).to_string_lossy().into_owned())
+            Ok(OsString::from_wide(&filename[0..size as usize])
+                .to_string_lossy()
+                .into_owned())
         }
     }
 
@@ -93,7 +135,13 @@ impl Process {
         unsafe {
             // figure how much storage we need to allocate for cmdline.
             let mut size: ULONG = 0;
-            NtQueryInformationProcess(*self.handle, 60, std::ptr::null_mut(), 0, &size as *const _ as *mut _);
+            NtQueryInformationProcess(
+                *self.handle,
+                60,
+                std::ptr::null_mut(),
+                0,
+                &size as *const _ as *mut _,
+            );
             if size == 0 {
                 // the above call always fails (with an error like 'The program issued a command but the
                 // command length is incorrect.'). It should set the size to how many chars we need to allocate
@@ -103,16 +151,23 @@ impl Process {
 
             //  Get the commandline
             let storage = vec![0_u16; size as usize];
-            let ret = NtQueryInformationProcess(*self.handle, 60,
-               (&storage as &[u16]) as * const _ as * mut _,
-               size, &size as *const _ as *mut _);
+            let ret = NtQueryInformationProcess(
+                *self.handle,
+                60,
+                (&storage as &[u16]) as *const _ as *mut _,
+                size,
+                &size as *const _ as *mut _,
+            );
 
             if ret != 0 {
-                return Err(Error::from(std::io::Error::from_raw_os_error(RtlNtStatusToDosError(ret) as i32)));
+                return Err(Error::from(std::io::Error::from_raw_os_error(
+                    RtlNtStatusToDosError(ret) as i32,
+                )));
             }
 
-            let unicode: PUNICODE_STRING = (&storage as &[u16]) as * const _ as * mut _;
-            let chars = std::slice::from_raw_parts((*unicode).Buffer, (*unicode).Length  as usize / 2);
+            let unicode: PUNICODE_STRING = (&storage as &[u16]) as *const _ as *mut _;
+            let chars =
+                std::slice::from_raw_parts((*unicode).Buffer, (*unicode).Length as usize / 2);
             let mut ret = Vec::new();
             ret.push(String::from_utf16_lossy(chars));
             Ok(ret)
@@ -123,9 +178,18 @@ impl Process {
         let mut ret = Vec::new();
         unsafe {
             let mut thread: HANDLE = std::mem::zeroed();
-            while NtGetNextThread(*self.handle, thread, MAXIMUM_ALLOWED, 0, 0,
-                                  &mut thread as *mut HANDLE) == 0 {
-                ret.push(Thread{ thread: thread.into() });
+            while NtGetNextThread(
+                *self.handle,
+                thread,
+                MAXIMUM_ALLOWED,
+                0,
+                0,
+                &mut thread as *mut HANDLE,
+            ) == 0
+            {
+                ret.push(Thread {
+                    thread: thread.into(),
+                });
             }
         }
         Ok(ret)
@@ -144,25 +208,32 @@ impl Process {
             // against tlhelp32 Process32First/Process32Next code - but seems to work
             // well enough for now
             let mut process: HANDLE = *self.handle;
-            while NtGetNextProcess(process, MAXIMUM_ALLOWED, 0, 0,
-                                  &mut process as *mut HANDLE) == 0 {
-
+            while NtGetNextProcess(process, MAXIMUM_ALLOWED, 0, 0, &mut process as *mut HANDLE) == 0
+            {
                 let mut basic_info = std::mem::zeroed::<PROCESS_BASIC_INFORMATION>();
                 let size: ULONG = 0;
-                let retcode = NtQueryInformationProcess(process, 0, &mut basic_info as * const _ as * mut _,
-                                                        std::mem::size_of_val(&basic_info) as ULONG, &size as *const _ as *mut _);
+                let retcode = NtQueryInformationProcess(
+                    process,
+                    0,
+                    &mut basic_info as *const _ as *mut _,
+                    std::mem::size_of_val(&basic_info) as ULONG,
+                    &size as *const _ as *mut _,
+                );
                 if retcode == 0 {
-                    processes.insert(basic_info.unique_process_id as Pid, basic_info.inherited_from_unique_process_id as Pid);
+                    processes.insert(
+                        basic_info.unique_process_id as Pid,
+                        basic_info.inherited_from_unique_process_id as Pid,
+                    );
                 }
             }
         }
         Ok(crate::filter_child_pids(self.pid, &processes))
     }
-    #[cfg(feature="unwind")]
+    #[cfg(feature = "unwind")]
     pub fn unwinder(&self) -> Result<unwinder::Unwinder, Error> {
         unwinder::Unwinder::new(*self.handle)
     }
-    #[cfg(feature="unwind")]
+    #[cfg(feature = "unwind")]
     pub fn symbolicator(&self) -> Result<Symbolicator, Error> {
         Symbolicator::new(*self.handle)
     }
@@ -188,7 +259,9 @@ impl Thread {
                 return Err(Error::from(std::io::Error::last_os_error()));
             }
 
-            Ok(Thread { thread: thread.into() })
+            Ok(Thread {
+                thread: thread.into(),
+            })
         }
     }
     pub fn lock(&self) -> Result<ThreadLock, Error> {
@@ -200,15 +273,18 @@ impl Thread {
     }
 
     pub fn active(&self) -> Result<bool, Error> {
-        // Getting whether a thread is active or not is suprisingly difficult on windows
+        // Getting whether a thread is active or not is surprisingly difficult on windows
         // we're getting the syscall the thread is doing here, and then checking against a list
         // of known waiting syscalls to get this
         unsafe {
             let mut data = std::mem::zeroed::<THREAD_LAST_SYSCALL_INFORMATION>();
-            let ret = NtQueryInformationThread(*self.thread, 21,
+            let ret = NtQueryInformationThread(
+                *self.thread,
+                21,
                 &mut data as *mut _ as *mut VOID,
                 std::mem::size_of::<THREAD_LAST_SYSCALL_INFORMATION>() as u32,
-                NULL as *mut u32);
+                NULL as *mut u32,
+            );
 
             // if we're not in a syscall, we're active
             if ret != 0 {
@@ -222,7 +298,7 @@ impl Thread {
 }
 
 pub struct Lock {
-    process: ProcessHandle
+    process: ProcessHandle,
 }
 
 impl Lock {
@@ -230,10 +306,12 @@ impl Lock {
         unsafe {
             let ret = NtSuspendProcess(*process);
             if ret != 0 {
-                return Err(Error::from(std::io::Error::from_raw_os_error(RtlNtStatusToDosError(ret) as i32)));
+                return Err(Error::from(std::io::Error::from_raw_os_error(
+                    RtlNtStatusToDosError(ret) as i32,
+                )));
             }
         }
-        Ok(Lock{process})
+        Ok(Lock { process })
     }
 }
 
@@ -242,15 +320,17 @@ impl Drop for Lock {
         unsafe {
             let ret = NtResumeProcess(*self.process);
             if ret != 0 {
-                panic!("Failed to resume process: {}",
-                        std::io::Error::from_raw_os_error(RtlNtStatusToDosError(ret) as i32));
+                panic!(
+                    "Failed to resume process: {}",
+                    std::io::Error::from_raw_os_error(RtlNtStatusToDosError(ret) as i32)
+                );
             }
         }
     }
 }
 
 pub struct ThreadLock {
-    thread: ProcessHandle
+    thread: ProcessHandle,
 }
 
 impl ThreadLock {
@@ -261,7 +341,7 @@ impl ThreadLock {
                 return Err(std::io::Error::last_os_error().into());
             }
 
-            Ok(ThreadLock{thread})
+            Ok(ThreadLock { thread })
         }
     }
 }
@@ -270,7 +350,10 @@ impl Drop for ThreadLock {
     fn drop(&mut self) {
         unsafe {
             if ResumeThread(*self.thread).wrapping_add(1) == 0 {
-                panic!("Failed to resume thread {}", std::io::Error::last_os_error());
+                panic!(
+                    "Failed to resume thread {}",
+                    std::io::Error::last_os_error()
+                );
             }
         }
     }
@@ -280,19 +363,18 @@ impl Drop for ThreadLock {
 #[derive(Copy, Clone, Debug)]
 struct THREAD_LAST_SYSCALL_INFORMATION {
     arg1: PVOID,
-    syscall_number: USHORT
+    syscall_number: USHORT,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 struct PROCESS_BASIC_INFORMATION {
     exit_status: NTSTATUS,
-    peb_base_address: * mut libc::c_void,
-    affinity_mask: * mut ULONG,
+    peb_base_address: *mut libc::c_void,
+    affinity_mask: *mut ULONG,
     base_priority: ULONG,
     unique_process_id: HANDLE,
-    inherited_from_unique_process_id: HANDLE
+    inherited_from_unique_process_id: HANDLE,
 }
-
 
 unsafe impl Send for Process {}
