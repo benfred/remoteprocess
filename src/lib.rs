@@ -185,20 +185,20 @@ pub trait ProcessMemory {
     }
 
     /// Copies a structure from another process
-    fn copy_struct<T>(&self, addr: usize) -> Result<T, Error> {
+    fn copy_struct<T: Copy>(&self, addr: usize) -> Result<T, Error> {
         let mut data = vec![0; std::mem::size_of::<T>()];
         self.read(addr, &mut data)?;
         Ok(unsafe { std::ptr::read(data.as_ptr() as *const _) })
     }
 
     /// Given a pointer that points to a struct in another process, returns the struct
-    fn copy_pointer<T>(&self, ptr: *const T) -> Result<T, Error> {
+    fn copy_pointer<T: Copy>(&self, ptr: *const T) -> Result<T, Error> {
         self.copy_struct(ptr as usize)
     }
 
     /// Copies a series of bytes from another process into a vector of
     /// structures of type T.
-    fn copy_vec<T>(&self, addr: usize, length: usize) -> Result<Vec<T>, Error> {
+    fn copy_vec<T: Copy>(&self, addr: usize, length: usize) -> Result<Vec<T>, Error> {
         let mut vec = self.copy(addr, length * std::mem::size_of::<T>())?;
         let capacity = vec.capacity() as usize / std::mem::size_of::<T>() as usize;
         let ptr = vec.as_mut_ptr() as *mut T;
@@ -252,6 +252,7 @@ fn filter_child_pids(
 pub mod tests {
     use super::*;
 
+    #[derive(Copy, Clone)]
     struct Point {
         x: i32,
         y: i64,
