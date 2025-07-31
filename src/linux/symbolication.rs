@@ -117,7 +117,7 @@ impl Symbolicator {
                                 );
                                 continue;
                             }
-                            m.start() as u64 - hdr.p_vaddr
+                            m.start() as u64 - hdr.p_vaddr + hdr.p_vaddr % hdr.p_align
                         }
                         None => {
                             warn!(
