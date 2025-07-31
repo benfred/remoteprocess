@@ -251,7 +251,7 @@ fn filter_child_pids(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-   
+
     #[derive(Copy, Clone)]
     struct Point {
         x: i32,
