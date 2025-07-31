@@ -13,11 +13,15 @@ fn main() {
 
     match env::var("CARGO_CFG_TARGET_OS").unwrap().as_ref() {
         "linux" => {
-            // statically link libunwind if compiling for musl, dynamically link otherwise
+            // statically link libunwind if statically linking musl (e.g. the
+            // `crt-static` target feature is present), dynamically link
+            // otherwise
             if env::var("CARGO_FEATURE_UNWIND").is_ok() {
                 println!("cargo:rustc-cfg=use_libunwind");
                 if env::var("CARGO_CFG_TARGET_ENV").unwrap() == "musl"
-                    && env::var("CARGO_CFG_TARGET_VENDOR").unwrap() != "alpine"
+                    && env::var("CARGO_CFG_TARGET_FEATURE")
+                        .unwrap_or_default()
+                        .contains("crt-static")
                 {
                     println!("cargo:rustc-link-search=native=/usr/local/lib");
 
