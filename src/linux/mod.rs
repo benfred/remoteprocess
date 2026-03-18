@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::Read;
-use std::os::unix::io::AsRawFd;
+use std::os::fd::AsFd;
 
 use super::Error;
 
@@ -295,7 +295,7 @@ impl Namespace {
             let target = File::open(target_ns_filename)?;
             // need to open this here, gets trickier after changing the namespace
             let self_ns = File::open("/proc/self/ns/mnt")?;
-            setns(target.as_raw_fd(), CloneFlags::from_bits_truncate(0))?;
+            setns(target.as_fd(), CloneFlags::from_bits_truncate(0))?;
             Ok(Namespace {
                 ns_file: Some(self_ns),
             })
@@ -313,7 +313,7 @@ impl Namespace {
 impl Drop for Namespace {
     fn drop(&mut self) {
         if let Some(ns_file) = self.ns_file.as_ref() {
-            setns(ns_file.as_raw_fd(), CloneFlags::from_bits_truncate(0)).unwrap();
+            setns(ns_file.as_fd(), CloneFlags::from_bits_truncate(0)).unwrap();
             info!("Restored process namespace");
         }
     }
