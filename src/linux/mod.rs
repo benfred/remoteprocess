@@ -239,15 +239,17 @@ impl ThreadLock {
             ptrace::Options::PTRACE_O_TRACEEXIT,
         )?;
 
+        // From this point on, every early return MUST run ptrace::detach or
+        // the tracee will remain seized until this process exits. Construct
+        // the ThreadLock value now so Drop handles cleanup on any `?`
+        // propagation below. See Drop for ThreadLock for the detach impl.
+        let lock = ThreadLock { tid };
+
         // Pause the process using `interrupt`.  Unlike `attach`, this doesn't
         // use `SIGSTOP` or cause execve to send a `SIGTRAP` and so avoids races
-        // with signals from foreign processes.
-        if let Err(e) = ptrace::interrupt(tid) {
-            if let Err(e) = ptrace::detach(tid, None) {
-                warn!("Failed to detach from thread {} for cleanup: {}", tid, e);
-            }
-            return Err(Error::NixError(e));
-        }
+        // with signals from foreign processes. On failure, `lock` is dropped
+        // on return and Drop runs detach.
+        ptrace::interrupt(tid).map_err(Error::NixError)?;
 
         // Verify that the thread has stopped.
         loop {
@@ -284,7 +286,7 @@ impl ThreadLock {
         }
 
         debug!("attached to thread {}", tid);
-        Ok(ThreadLock { tid })
+        Ok(lock)
     }
 }
 
@@ -405,4 +407,68 @@ fn test_parse_ppid_stat() {
     assert_eq!(get_ppid_status(b"83 (Thread.(<lambda>)) S 1 19"), Some(1));
     // Invalid UTF-8 and whitespace:
     assert_eq!(get_ppid_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(1));
+}
+
+/// Regression test for #117: a seize leak when waitpid in ThreadLock::new
+/// returns EINTR before the lock is constructed.
+#[test]
+fn test_threadlock_leak_on_waitpid_eintr() {
+    use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal};
+    use nix::unistd::Pid;
+    use std::process::Command;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let mut child = Command::new("sleep").arg("60").spawn().unwrap();
+    let child_pid = Pid::from_raw(child.id() as i32);
+    thread::sleep(Duration::from_millis(20));
+
+    extern "C" fn noop(_: libc::c_int) {}
+    let action = SigAction::new(
+        SigHandler::Handler(noop),
+        SaFlags::empty(),
+        SigSet::empty(),
+    );
+    let prior = unsafe { sigaction(Signal::SIGUSR1, &action).unwrap() };
+
+    let tid = unsafe { libc::syscall(libc::SYS_gettid) } as libc::pid_t;
+    let tgid = std::process::id() as libc::pid_t;
+    let stop = Arc::new(AtomicBool::new(false));
+    let helper = {
+        let stop = stop.clone();
+        thread::spawn(move || {
+            while !stop.load(Ordering::Relaxed) {
+                for _ in 0..256 {
+                    unsafe { libc::syscall(libc::SYS_tgkill, tgid, tid, libc::SIGUSR1); }
+                }
+                thread::yield_now();
+            }
+        })
+    };
+
+    let mut first_err = None;
+    for _ in 0..5000 {
+        if let Err(e) = ThreadLock::new(child_pid) {
+            first_err = Some(e);
+            break;
+        }
+    }
+    stop.store(true, Ordering::Relaxed);
+    helper.join().unwrap();
+    unsafe { sigaction(Signal::SIGUSR1, &prior).unwrap(); }
+
+    let first_err = first_err.expect("EINTR race did not fire in 5000 attempts");
+
+    let second_err = match ThreadLock::new(child_pid) {
+        Ok(lock) => { drop(lock); None }
+        Err(e) => Some(e),
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+
+    if let Some(e) = second_err {
+        panic!("seize leaked: first={:?}, second={:?}", first_err, e);
+    }
 }
