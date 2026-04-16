@@ -13,15 +13,15 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-      - uses: pre-commit/action@v3.0.0
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+      - uses: pre-commit/action@v3.0.1
 
   build-mac:
     runs-on: macos-latest
     needs: [lint]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -34,7 +34,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, ubuntu-22.04-arm]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
     - name: Install Dependencies
       run: sudo apt install libunwind-dev liblzma-dev
       if: runner.os == 'Linux'
@@ -61,7 +61,7 @@ jobs:
         RUSTUP_HOME: /root/.rustup
         CARGO_HOME: /root/.cargo
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
     - name: Build (unwind)
       run: cargo build --verbose --features unwind --examples
       if: matrix.target == 'x86_64-unknown-linux-musl'  || matrix.target == 'armv7-unknown-linux-musleabihf'
@@ -82,7 +82,7 @@ jobs:
         box:
           - freebsd-14
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: Display CPU info
         run: lscpu
       - name: Install VM tools
