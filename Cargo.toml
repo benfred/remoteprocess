@@ -26,10 +26,10 @@ libproc = "0.14"
 
 [target.'cfg(target_os="linux")'.dependencies]
 nix = {version = "0.31", default-features = false, features = ["ptrace", "sched", "signal"]}
-object = "0.37"
-addr2line = "0.25"
+object = "0.39"
+addr2line = "0.26"
 lazy_static = "1.5.0"
-memmap2 = "0.9.7"
+memmap2 = "0.9.10"
 
 [target.'cfg(windows)'.dependencies]
 winapi = {version = "0.3", features = ["winbase", "consoleapi", "wincon", "handleapi", "timeapi", "processenv", "errhandlingapi" ]}

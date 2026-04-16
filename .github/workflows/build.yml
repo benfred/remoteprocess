@@ -36,7 +36,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install Dependencies
-      run: sudo apt install libunwind-dev
+      run: sudo apt install libunwind-dev liblzma-dev
       if: runner.os == 'Linux'
     - name: Build
       run: cargo build --verbose --examples --features unwind

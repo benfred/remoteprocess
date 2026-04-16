@@ -48,6 +48,7 @@ fn main() {
                     println!("cargo:rustc-link-lib=static=unwind-{}", target_arch);
                     println!("cargo:rustc-link-lib=static=z");
                 } else {
+                    println!("cargo:rustc-link-lib=dylib=lzma");
                     println!("cargo:rustc-link-lib=dylib=unwind");
                     println!("cargo:rustc-link-lib=dylib=unwind-ptrace");
                     println!("cargo:rustc-link-lib=dylib=unwind-{}", target_arch);
