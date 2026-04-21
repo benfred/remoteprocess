@@ -97,6 +97,17 @@ impl Process {
                             // the thread probably exited before we could get a lock
                             continue;
                         }
+                        Err(e @ Error::NixError(nix::errno::Errno::EPERM)) => {
+                            if !thread.exists() {
+                                // The thread was probably in the "exiting" state, which returns
+                                // EPERM to the caller. This thread is dead, we can not ptrace
+                                // it and we should just ignore it.
+                                // See https://elixir.bootlin.com/linux/v6.15.3/source/kernel/ptrace.c#L458
+                                continue;
+                            }
+                            // We likely really have no permission, propagate the error
+                            return Err(e);
+                        }
                         Err(e) => return Err(e),
                     }
                 }
@@ -167,6 +178,11 @@ impl Thread {
 
     pub fn id(&self) -> Result<Tid, Error> {
         Ok(self.tid.as_raw())
+    }
+
+    /// True if this thread still exists and has not yet exited.
+    fn exists(&self) -> bool {
+        std::path::Path::new(&format!("/proc/{}/stat", self.tid)).exists()
     }
 
     pub fn active(&self) -> Result<bool, Error> {
