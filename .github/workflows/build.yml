@@ -13,7 +13,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
       - uses: pre-commit/action@v3.0.1
 
@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-latest
     needs: [lint]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -34,7 +34,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, ubuntu-22.04-arm]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Install Dependencies
       run: sudo apt install libunwind-dev liblzma-dev
       if: runner.os == 'Linux'
@@ -61,7 +61,7 @@ jobs:
         RUSTUP_HOME: /root/.rustup
         CARGO_HOME: /root/.cargo
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Build (unwind)
       run: cargo build --verbose --features unwind --examples
       if: matrix.target == 'x86_64-unknown-linux-musl'  || matrix.target == 'armv7-unknown-linux-musleabihf'
@@ -79,7 +79,7 @@ jobs:
     needs: [lint]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -88,7 +88,7 @@ jobs:
 
       - name: Cache cross binary
         id: cache-cross
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/cross
