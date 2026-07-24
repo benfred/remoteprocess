@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
+use std::os::windows::io::RawHandle;
 use winapi::shared::minwindef::{DWORD, FALSE, MAX_PATH, ULONG};
 use winapi::shared::ntdef::PUNICODE_STRING;
 use winapi::shared::ntdef::{NTSTATUS, NULL, PVOID, USHORT, VOID};
@@ -88,12 +89,12 @@ impl Process {
                 FALSE,
                 pid,
             );
-            if handle == (0 as std::os::windows::io::RawHandle) {
+            if handle.is_null() {
                 return Err(Error::from(std::io::Error::last_os_error()));
             }
             Ok(Process {
                 pid,
-                handle: handle.into(),
+                handle: (handle as RawHandle).into(),
             })
         }
     }
@@ -106,7 +107,12 @@ impl Process {
         unsafe {
             let mut size = MAX_PATH as DWORD;
             let mut filename: [WCHAR; MAX_PATH] = std::mem::zeroed();
-            let ret = QueryFullProcessImageNameW(*self.handle, 0, filename.as_mut_ptr(), &mut size);
+            let ret = QueryFullProcessImageNameW(
+                *self.handle as HANDLE,
+                0,
+                filename.as_mut_ptr(),
+                &mut size,
+            );
             if ret == 0 {
                 return Err(std::io::Error::last_os_error().into());
             }
@@ -136,7 +142,7 @@ impl Process {
             // figure how much storage we need to allocate for cmdline.
             let mut size: ULONG = 0;
             NtQueryInformationProcess(
-                *self.handle,
+                *self.handle as HANDLE,
                 60,
                 std::ptr::null_mut(),
                 0,
@@ -152,7 +158,7 @@ impl Process {
             //  Get the commandline
             let storage = vec![0_u16; size as usize];
             let ret = NtQueryInformationProcess(
-                *self.handle,
+                *self.handle as HANDLE,
                 60,
                 (&storage as &[u16]) as *const _ as *mut _,
                 size,
@@ -179,7 +185,7 @@ impl Process {
         unsafe {
             let mut thread: HANDLE = std::mem::zeroed();
             while NtGetNextThread(
-                *self.handle,
+                *self.handle as HANDLE,
                 thread,
                 MAXIMUM_ALLOWED,
                 0,
@@ -188,7 +194,7 @@ impl Process {
             ) == 0
             {
                 ret.push(Thread {
-                    thread: thread.into(),
+                    thread: (thread as RawHandle).into(),
                 });
             }
         }
@@ -207,7 +213,7 @@ impl Process {
             // This might be worth coming back to a later date and benchmarking
             // against tlhelp32 Process32First/Process32Next code - but seems to work
             // well enough for now
-            let mut process: HANDLE = *self.handle;
+            let mut process: HANDLE = *self.handle as HANDLE;
             while NtGetNextProcess(process, MAXIMUM_ALLOWED, 0, 0, &mut process as *mut HANDLE) == 0
             {
                 let mut basic_info = std::mem::zeroed::<PROCESS_BASIC_INFORMATION>();
@@ -231,11 +237,11 @@ impl Process {
     }
     #[cfg(feature = "unwind")]
     pub fn unwinder(&self) -> Result<unwinder::Unwinder, Error> {
-        unwinder::Unwinder::new(*self.handle)
+        unwinder::Unwinder::new(*self.handle as HANDLE)
     }
     #[cfg(feature = "unwind")]
     pub fn symbolicator(&self) -> Result<Symbolicator, Error> {
-        Symbolicator::new(*self.handle)
+        Symbolicator::new(*self.handle as HANDLE)
     }
 }
 
@@ -255,12 +261,12 @@ impl Thread {
         // we can't just use try_into_prcess_handle here because we need some additional permissions
         unsafe {
             let thread = OpenThread(THREAD_ALL_ACCESS, FALSE, tid);
-            if thread == (0 as std::os::windows::io::RawHandle) {
+            if thread.is_null() {
                 return Err(Error::from(std::io::Error::last_os_error()));
             }
 
             Ok(Thread {
-                thread: thread.into(),
+                thread: (thread as RawHandle).into(),
             })
         }
     }
@@ -269,7 +275,7 @@ impl Thread {
     }
 
     pub fn id(&self) -> Result<Tid, Error> {
-        unsafe { Ok(GetThreadId(*self.thread)) }
+        unsafe { Ok(GetThreadId(*self.thread as HANDLE)) }
     }
 
     pub fn active(&self) -> Result<bool, Error> {
@@ -279,7 +285,7 @@ impl Thread {
         unsafe {
             let mut data = std::mem::zeroed::<THREAD_LAST_SYSCALL_INFORMATION>();
             let ret = NtQueryInformationThread(
-                *self.thread,
+                *self.thread as HANDLE,
                 21,
                 &mut data as *mut _ as *mut VOID,
                 std::mem::size_of::<THREAD_LAST_SYSCALL_INFORMATION>() as u32,
@@ -304,7 +310,7 @@ pub struct Lock {
 impl Lock {
     pub fn new(process: ProcessHandle) -> Result<Lock, Error> {
         unsafe {
-            let ret = NtSuspendProcess(*process);
+            let ret = NtSuspendProcess(*process as HANDLE);
             if ret != 0 {
                 return Err(Error::from(std::io::Error::from_raw_os_error(
                     RtlNtStatusToDosError(ret) as i32,
@@ -318,7 +324,7 @@ impl Lock {
 impl Drop for Lock {
     fn drop(&mut self) {
         unsafe {
-            let ret = NtResumeProcess(*self.process);
+            let ret = NtResumeProcess(*self.process as HANDLE);
             if ret != 0 {
                 panic!(
                     "Failed to resume process: {}",
@@ -336,7 +342,7 @@ pub struct ThreadLock {
 impl ThreadLock {
     pub fn new(thread: ProcessHandle) -> Result<ThreadLock, Error> {
         unsafe {
-            let ret = SuspendThread(*thread);
+            let ret = SuspendThread(*thread as HANDLE);
             if ret.wrapping_add(1) == 0 {
                 return Err(std::io::Error::last_os_error().into());
             }
@@ -349,7 +355,7 @@ impl ThreadLock {
 impl Drop for ThreadLock {
     fn drop(&mut self) {
         unsafe {
-            if ResumeThread(*self.thread).wrapping_add(1) == 0 {
+            if ResumeThread(*self.thread as HANDLE).wrapping_add(1) == 0 {
                 panic!(
                     "Failed to resume thread {}",
                     std::io::Error::last_os_error()

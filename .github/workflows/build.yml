@@ -13,7 +13,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
       - uses: pre-commit/action@v3.0.1
 
@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-latest
     needs: [lint]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -34,7 +34,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, ubuntu-22.04-arm]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Install Dependencies
       run: sudo apt install libunwind-dev liblzma-dev
       if: runner.os == 'Linux'
@@ -61,7 +61,7 @@ jobs:
         RUSTUP_HOME: /root/.rustup
         CARGO_HOME: /root/.cargo
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Build (unwind)
       run: cargo build --verbose --features unwind --examples
       if: matrix.target == 'x86_64-unknown-linux-musl'  || matrix.target == 'armv7-unknown-linux-musleabihf'
@@ -74,31 +74,76 @@ jobs:
     #  if: matrix.target == 'x86_64-unknown-linux-musl'
 
   build-freebsd:
-    runs-on: ubuntu-22.04
+    name: Build and test (freebsd-x86_64)
+    runs-on: ubuntu-24.04
     needs: [lint]
     timeout-minutes: 30
-    strategy:
-      matrix:
-        box:
-          - freebsd-14
     steps:
-      - uses: actions/checkout@v6
-      - name: Display CPU info
-        run: lscpu
-      - name: Install VM tools
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Cache cross binary
+        id: cache-cross
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/cross
+          key: ${{ runner.os }}-cross-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cross-
+
+      - name: Install cross
+        if: steps.cache-cross.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -qq -o=Dpkg::Use-Pty=0 moreutils
-          sudo chronic apt-get install -qq -o=Dpkg::Use-Pty=0 vagrant virtualbox qemu libvirt-daemon-system
-      - name: Set up VM
-        shell: sudo bash {0}
+          cargo install cross --git https://github.com/cross-rs/cross --rev 51f46f296253d8122c927c5bb933e3c4f27cc317
+          cross --version
+
+      - name: Cross-compile test binaries
         run: |
-          vagrant plugin install vagrant-libvirt
-          vagrant plugin install vagrant-scp
-          ln -sf ci/Vagrantfile Vagrantfile
-          vagrant status
-          vagrant up --no-tty --provider libvirt ${{ matrix.box }}
-      - name: Build and test
-        shell: sudo bash {0}
-        run: vagrant ssh ${{ matrix.box }} -- bash /vagrant/ci/test_freebsd.sh
+          cross build --release --workspace --all-targets --target x86_64-unknown-freebsd
+          cross test --release --no-run --target x86_64-unknown-freebsd
+
+      - name: Run tests in FreeBSD VM
+        uses: acj/freebsd-firecracker-action@v0.10.4
+        with:
+          checkout: true
+          verbose: false
+          pre-run: |
+            include_path="$(mktemp)"
+            cat <<EOF > "$include_path"
+            target
+            target/x86_64-unknown-freebsd
+            target/x86_64-unknown-freebsd/release
+            target/x86_64-unknown-freebsd/release/deps
+            target/x86_64-unknown-freebsd/release/deps/*
+            EOF
+
+            rsync -r -e "ssh" \
+              --relative \
+              --copy-links \
+              --include-from "$include_path" \
+              --exclude "*" \
+              . firecracker:
+            rm -f "$include_path"
+          run-in-vm: |
+            set -e
+            env ASSUME_ALWAYS_YES=yes pkg install -y perl5
+            set +e
+
+            failed=0
+            for testbin in $(find target/x86_64-unknown-freebsd/release/deps -type f -perm -u+x ! -name "*.d" -print); do
+              echo "Running $testbin"
+              if ! "$testbin"; then
+                failed=1
+              fi
+            done
+
+            if [ "$failed" -ne 0 ]; then
+              exit 1
+            fi
+          post-run: ""
 
