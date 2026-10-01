@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
       - uses: pre-commit/action@v3.0.1
 
   build-mac:
@@ -108,7 +108,7 @@ jobs:
           cross test --release --no-run --target x86_64-unknown-freebsd
 
       - name: Run tests in FreeBSD VM
-        uses: acj/freebsd-firecracker-action@v0.10.4
+        uses: acj/freebsd-firecracker-action@v0.11.0
         with:
           checkout: true
           verbose: false
