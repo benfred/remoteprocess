@@ -426,11 +426,7 @@ fn test_threadlock_leak_on_waitpid_eintr() {
     thread::sleep(Duration::from_millis(20));
 
     extern "C" fn noop(_: libc::c_int) {}
-    let action = SigAction::new(
-        SigHandler::Handler(noop),
-        SaFlags::empty(),
-        SigSet::empty(),
-    );
+    let action = SigAction::new(SigHandler::Handler(noop), SaFlags::empty(), SigSet::empty());
     let prior = unsafe { sigaction(Signal::SIGUSR1, &action).unwrap() };
 
     let tid = unsafe { libc::syscall(libc::SYS_gettid) } as libc::pid_t;
@@ -441,7 +437,9 @@ fn test_threadlock_leak_on_waitpid_eintr() {
         thread::spawn(move || {
             while !stop.load(Ordering::Relaxed) {
                 for _ in 0..256 {
-                    unsafe { libc::syscall(libc::SYS_tgkill, tgid, tid, libc::SIGUSR1); }
+                    unsafe {
+                        libc::syscall(libc::SYS_tgkill, tgid, tid, libc::SIGUSR1);
+                    }
                 }
                 thread::yield_now();
             }
@@ -457,12 +455,17 @@ fn test_threadlock_leak_on_waitpid_eintr() {
     }
     stop.store(true, Ordering::Relaxed);
     helper.join().unwrap();
-    unsafe { sigaction(Signal::SIGUSR1, &prior).unwrap(); }
+    unsafe {
+        sigaction(Signal::SIGUSR1, &prior).unwrap();
+    }
 
     let first_err = first_err.expect("EINTR race did not fire in 5000 attempts");
 
     let second_err = match ThreadLock::new(child_pid) {
-        Ok(lock) => { drop(lock); None }
+        Ok(lock) => {
+            drop(lock);
+            None
+        }
         Err(e) => Some(e),
     };
     let _ = child.kill();
