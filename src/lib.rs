@@ -171,6 +171,41 @@ impl std::fmt::Display for StackFrame {
     }
 }
 
+/// Compile-time check that every bit pattern of `size_of::<T>()` bytes is a
+/// valid `T`, so that `T` can be safely materialized from bytes read out of
+/// another process.
+///
+/// `T: Copy` is not enough for that. A type with invalid bit patterns has a
+/// *niche*, and rustc is free to store an enum discriminant in it - in
+/// particular the discriminant of the `Result<T, Error>` that the copy
+/// functions below return, when the niche leaves no room for a real tag. A
+/// stale read whose bytes happen to hit the niche value then produces an `Err`
+/// whose payload is bytes from the target process, and dropping that error
+/// frees a pointer that came from the target process.
+///
+/// That is not hypothetical: it is the root cause of a `free(): invalid
+/// pointer` crash in py-spy on Python 3.11, whose `_PyInterpreterFrame`
+/// binding has a `bool` as its only niche, in the last 4 bytes of an 80 byte
+/// struct that leaves `Result<_PyInterpreterFrame, Error>` no room for a tag.
+/// See https://github.com/grafana/pyroscope-python/pull/146.
+///
+/// A type without a niche always makes `Option<T>` strictly larger than `T`,
+/// which is what this checks. The check is intentionally conservative: it
+/// rejects `bool`, `char`, references, `NonNull`, enums and any struct
+/// containing them, and accepts integers, floats, raw pointers, function
+/// pointers wrapped in `Option`, arrays and structs built out of those.
+struct AssertNoNiche<T>(std::marker::PhantomData<T>);
+
+impl<T> AssertNoNiche<T> {
+    const ASSERT: () = assert!(
+        std::mem::size_of::<Option<T>>() > std::mem::size_of::<T>(),
+        "this type has a niche: not every bit pattern is a valid value, so it \
+         must not be copied out of another process. rustc may store an enum \
+         discriminant in the niche, which turns a stale read into an `Err` \
+         holding bytes from the target process"
+    );
+}
+
 pub trait ProcessMemory {
     /// Copies memory from another process into an already allocated
     /// byte buffer
@@ -185,7 +220,11 @@ pub trait ProcessMemory {
     }
 
     /// Copies a structure from another process
+    ///
+    /// `T` must be valid for every bit pattern, since the bytes come from
+    /// another process: this fails to compile for types that have a niche.
     fn copy_struct<T: Copy>(&self, addr: usize) -> Result<T, Error> {
+        let () = AssertNoNiche::<T>::ASSERT;
         let mut data = vec![0; std::mem::size_of::<T>()];
         self.read(addr, &mut data)?;
         Ok(unsafe { std::ptr::read(data.as_ptr() as *const _) })
@@ -198,7 +237,11 @@ pub trait ProcessMemory {
 
     /// Copies a series of bytes from another process into a vector of
     /// structures of type T.
+    ///
+    /// As with [`ProcessMemory::copy_struct`], `T` must be valid for every bit
+    /// pattern.
     fn copy_vec<T: Copy>(&self, addr: usize, length: usize) -> Result<Vec<T>, Error> {
+        let () = AssertNoNiche::<T>::ASSERT;
         let mut vec = self.copy(addr, length * std::mem::size_of::<T>())?;
         let capacity = vec.capacity() as usize / std::mem::size_of::<T>() as usize;
         let ptr = vec.as_mut_ptr() as *mut T;
