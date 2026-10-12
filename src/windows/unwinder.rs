@@ -2,10 +2,10 @@ use winapi::um::processthreadsapi::GetThreadContext;
 use winapi::um::winnt::{CONTEXT, CONTEXT_FULL, HANDLE};
 
 // StackWalk64 needs the machine type matching the CONTEXT layout we pass in
-#[cfg(target_arch = "aarch64")]
-use winapi::um::winnt::IMAGE_FILE_MACHINE_ARM64 as IMAGE_FILE_MACHINE_NATIVE;
 #[cfg(not(target_arch = "aarch64"))]
 use winapi::um::winnt::IMAGE_FILE_MACHINE_AMD64 as IMAGE_FILE_MACHINE_NATIVE;
+#[cfg(target_arch = "aarch64")]
+use winapi::um::winnt::IMAGE_FILE_MACHINE_ARM64 as IMAGE_FILE_MACHINE_NATIVE;
 
 use winapi::shared::minwindef::TRUE;
 use winapi::um::dbghelp::{AddrModeFlat, StackWalk64, ADDRESS64, STACKFRAME64};
