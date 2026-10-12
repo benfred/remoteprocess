@@ -1,5 +1,11 @@
 use winapi::um::processthreadsapi::GetThreadContext;
-use winapi::um::winnt::{CONTEXT, HANDLE, IMAGE_FILE_MACHINE_AMD64};
+use winapi::um::winnt::{CONTEXT, CONTEXT_FULL, HANDLE};
+
+// StackWalk64 needs the machine type matching the CONTEXT layout we pass in
+#[cfg(not(target_arch = "aarch64"))]
+use winapi::um::winnt::IMAGE_FILE_MACHINE_AMD64 as IMAGE_FILE_MACHINE_NATIVE;
+#[cfg(target_arch = "aarch64")]
+use winapi::um::winnt::IMAGE_FILE_MACHINE_ARM64 as IMAGE_FILE_MACHINE_NATIVE;
 
 use winapi::shared::minwindef::TRUE;
 use winapi::um::dbghelp::{AddrModeFlat, StackWalk64, ADDRESS64, STACKFRAME64};
@@ -32,7 +38,7 @@ impl Cursor {
     pub fn new(thread: HANDLE, process: HANDLE) -> Result<Cursor, Error> {
         unsafe {
             let mut ctx: Context = std::mem::zeroed();
-            ctx.0.ContextFlags = 1048587; // CONTEXT_FULL
+            ctx.0.ContextFlags = CONTEXT_FULL;
             if GetThreadContext(thread, &mut ctx.0 as *mut CONTEXT) == 0 {
                 return Err(Error::from(std::io::Error::last_os_error()));
             }
@@ -47,7 +53,7 @@ impl Cursor {
             cfg_if::cfg_if! {
                 if #[cfg(target_arch = "aarch64")] {
                   set_flat_addr(&mut frame.AddrStack, ctx.0.Sp as u64);
-                  set_flat_addr(&mut frame.AddrFrame, ctx.0.u.s().Lr as u64);
+                  set_flat_addr(&mut frame.AddrFrame, ctx.0.u.s().Fp as u64);
                   set_flat_addr(&mut frame.AddrPC, ctx.0.Pc as u64);
                 } else {
                   set_flat_addr(&mut frame.AddrStack, ctx.0.Rsp as u64);
@@ -68,7 +74,7 @@ impl Cursor {
     fn unwind(&mut self) -> Result<Option<u64>, Error> {
         unsafe {
             if StackWalk64(
-                IMAGE_FILE_MACHINE_AMD64.into(),
+                IMAGE_FILE_MACHINE_NATIVE.into(),
                 self.process,
                 self.thread,
                 &mut self.frame,
