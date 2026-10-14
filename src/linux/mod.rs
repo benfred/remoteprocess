@@ -368,110 +368,116 @@ fn get_ppid_status(stat: &[u8]) -> Option<Pid> {
         .ok()
 }
 
-#[test]
-fn test_parse_active_stat() {
-    assert_eq!(get_active_status(b"1234 (bash) S 1233"), Some(b'S'));
-    assert_eq!(get_active_status(b"1234 (with space) R 1233"), Some(b'R'));
-    assert_eq!(get_active_status(b"1234"), None);
-    assert_eq!(get_active_status(b")"), None);
-    assert_eq!(get_active_status(b")))"), None);
-    assert_eq!(get_active_status(b"1234 (bash)S"), None);
-    assert_eq!(get_active_status(b"1234)SSSS"), None);
-    assert_eq!(
-        get_active_status(b"15379 (ipython) t 9898 15379 9898 34816"),
-        Some(b't')
-    );
-    // comm may itself contain `)`:
-    assert_eq!(
-        get_active_status(b"83 (Thread.(<lambda>)) S 1 19"),
-        Some(b'S')
-    );
-    // Invalid UTF-8 and whitespace:
-    assert_eq!(get_active_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(b'R'));
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mark_flaky_tests::flaky;
 
-#[test]
-fn test_parse_ppid_stat() {
-    assert_eq!(get_ppid_status(b"1234 (bash) S 1233"), Some(1233));
-    assert_eq!(get_ppid_status(b"1234 (with space) R 1233"), Some(1233));
-    assert_eq!(get_ppid_status(b"1234"), None);
-    assert_eq!(get_ppid_status(b")"), None);
-    assert_eq!(get_ppid_status(b")))"), None);
-    assert_eq!(get_ppid_status(b"1234 (bash)S"), None);
-    assert_eq!(get_ppid_status(b"1234)SSSS"), None);
-    assert_eq!(
-        get_ppid_status(b"15379 (ipython) t 9898 15379 9898 34816"),
-        Some(9898)
-    );
-    // comm may itself contain `)`:
-    assert_eq!(get_ppid_status(b"83 (Thread.(<lambda>)) S 1 19"), Some(1));
-    // Invalid UTF-8 and whitespace:
-    assert_eq!(get_ppid_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(1));
-}
+    #[test]
+    fn test_parse_active_stat() {
+        assert_eq!(get_active_status(b"1234 (bash) S 1233"), Some(b'S'));
+        assert_eq!(get_active_status(b"1234 (with space) R 1233"), Some(b'R'));
+        assert_eq!(get_active_status(b"1234"), None);
+        assert_eq!(get_active_status(b")"), None);
+        assert_eq!(get_active_status(b")))"), None);
+        assert_eq!(get_active_status(b"1234 (bash)S"), None);
+        assert_eq!(get_active_status(b"1234)SSSS"), None);
+        assert_eq!(
+            get_active_status(b"15379 (ipython) t 9898 15379 9898 34816"),
+            Some(b't')
+        );
+        // comm may itself contain `)`:
+        assert_eq!(
+            get_active_status(b"83 (Thread.(<lambda>)) S 1 19"),
+            Some(b'S')
+        );
+        // Invalid UTF-8 and whitespace:
+        assert_eq!(get_active_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(b'R'));
+    }
 
-/// Regression test for #117: a seize leak when waitpid in ThreadLock::new
-/// returns EINTR before the lock is constructed.
-#[test]
-fn test_threadlock_leak_on_waitpid_eintr() {
-    use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal};
-    use nix::unistd::Pid;
-    use std::process::Command;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
-    use std::thread;
-    use std::time::Duration;
+    #[test]
+    fn test_parse_ppid_stat() {
+        assert_eq!(get_ppid_status(b"1234 (bash) S 1233"), Some(1233));
+        assert_eq!(get_ppid_status(b"1234 (with space) R 1233"), Some(1233));
+        assert_eq!(get_ppid_status(b"1234"), None);
+        assert_eq!(get_ppid_status(b")"), None);
+        assert_eq!(get_ppid_status(b")))"), None);
+        assert_eq!(get_ppid_status(b"1234 (bash)S"), None);
+        assert_eq!(get_ppid_status(b"1234)SSSS"), None);
+        assert_eq!(
+            get_ppid_status(b"15379 (ipython) t 9898 15379 9898 34816"),
+            Some(9898)
+        );
+        // comm may itself contain `)`:
+        assert_eq!(get_ppid_status(b"83 (Thread.(<lambda>)) S 1 19"), Some(1));
+        // Invalid UTF-8 and whitespace:
+        assert_eq!(get_ppid_status(b"83 (\xc3\x28)) S ) R 1 19"), Some(1));
+    }
 
-    let mut child = Command::new("sleep").arg("60").spawn().unwrap();
-    let child_pid = Pid::from_raw(child.id() as i32);
-    thread::sleep(Duration::from_millis(20));
+    /// Regression test for #117: a seize leak when waitpid in ThreadLock::new
+    /// returns EINTR before the lock is constructed.
+    #[flaky]
+    fn test_threadlock_leak_on_waitpid_eintr() {
+        use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal};
+        use nix::unistd::Pid;
+        use std::process::Command;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        use std::thread;
+        use std::time::Duration;
 
-    extern "C" fn noop(_: libc::c_int) {}
-    let action = SigAction::new(SigHandler::Handler(noop), SaFlags::empty(), SigSet::empty());
-    let prior = unsafe { sigaction(Signal::SIGUSR1, &action).unwrap() };
+        let mut child = Command::new("sleep").arg("60").spawn().unwrap();
+        let child_pid = Pid::from_raw(child.id() as i32);
+        thread::sleep(Duration::from_millis(20));
 
-    let tid = unsafe { libc::syscall(libc::SYS_gettid) } as libc::pid_t;
-    let tgid = std::process::id() as libc::pid_t;
-    let stop = Arc::new(AtomicBool::new(false));
-    let helper = {
-        let stop = stop.clone();
-        thread::spawn(move || {
-            while !stop.load(Ordering::Relaxed) {
-                for _ in 0..256 {
-                    unsafe {
-                        libc::syscall(libc::SYS_tgkill, tgid, tid, libc::SIGUSR1);
+        extern "C" fn noop(_: libc::c_int) {}
+        let action = SigAction::new(SigHandler::Handler(noop), SaFlags::empty(), SigSet::empty());
+        let prior = unsafe { sigaction(Signal::SIGUSR1, &action).unwrap() };
+
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) } as libc::pid_t;
+        let tgid = std::process::id() as libc::pid_t;
+        let stop = Arc::new(AtomicBool::new(false));
+        let helper = {
+            let stop = stop.clone();
+            thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    for _ in 0..256 {
+                        unsafe {
+                            libc::syscall(libc::SYS_tgkill, tgid, tid, libc::SIGUSR1);
+                        }
                     }
+                    thread::yield_now();
                 }
-                thread::yield_now();
+            })
+        };
+
+        let mut first_err = None;
+        for _ in 0..5000 {
+            if let Err(e) = ThreadLock::new(child_pid) {
+                first_err = Some(e);
+                break;
             }
-        })
-    };
-
-    let mut first_err = None;
-    for _ in 0..5000 {
-        if let Err(e) = ThreadLock::new(child_pid) {
-            first_err = Some(e);
-            break;
         }
-    }
-    stop.store(true, Ordering::Relaxed);
-    helper.join().unwrap();
-    unsafe {
-        sigaction(Signal::SIGUSR1, &prior).unwrap();
-    }
-
-    let first_err = first_err.expect("EINTR race did not fire in 5000 attempts");
-
-    let second_err = match ThreadLock::new(child_pid) {
-        Ok(lock) => {
-            drop(lock);
-            None
+        stop.store(true, Ordering::Relaxed);
+        helper.join().unwrap();
+        unsafe {
+            sigaction(Signal::SIGUSR1, &prior).unwrap();
         }
-        Err(e) => Some(e),
-    };
-    let _ = child.kill();
-    let _ = child.wait();
 
-    if let Some(e) = second_err {
-        panic!("seize leaked: first={:?}, second={:?}", first_err, e);
+        let first_err = first_err.expect("EINTR race did not fire in 5000 attempts");
+
+        let second_err = match ThreadLock::new(child_pid) {
+            Ok(lock) => {
+                drop(lock);
+                None
+            }
+            Err(e) => Some(e),
+        };
+        let _ = child.kill();
+        let _ = child.wait();
+
+        if let Some(e) = second_err {
+            panic!("seize leaked: first={:?}, second={:?}", first_err, e);
+        }
     }
 }

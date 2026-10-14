@@ -1,7 +1,6 @@
 remoteprocess
 =====
-[![Build Status](https://github.com/benfred/remoteprocess/workflows/Build/badge.svg?branch=master)](https://github.com/benfred/remoteprocess/actions?query=branch%3Amaster)
-[![FreeBSD Build Status](https://api.cirrus-ci.com/github/benfred/remoteprocess.svg)](https://cirrus-ci.com/github/benfred/remoteprocess)
+[![Build Status](https://github.com/benfred/remoteprocess/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/benfred/remoteprocess/actions/workflows/build.yml)
 
 This crate provides a cross platform way of querying information about other processes running on
 the system. This let's you build profiling and debugging tools.
@@ -66,7 +65,7 @@ Currently we only have implementations for getting stack traces on some platform
 | i686    |       |         |     |         |
 | x86-64  | yes   | yes     |     |         |
 | ARM     | yes   |         |     |         |
-| Aarch64 | yes   |         |     |         |
+| Aarch64 | yes   | yes     |     |         |
 
 ## Credits
 
