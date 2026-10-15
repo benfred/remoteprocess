@@ -225,9 +225,16 @@ pub trait ProcessMemory {
     /// another process: this fails to compile for types that have a niche.
     fn copy_struct<T: Copy>(&self, addr: usize) -> Result<T, Error> {
         let () = AssertNoNiche::<T>::ASSERT;
-        let mut data = vec![0; std::mem::size_of::<T>()];
-        self.read(addr, &mut data)?;
-        Ok(unsafe { std::ptr::read(data.as_ptr() as *const _) })
+        // zeroed rather than uninit: a &mut [u8] over uninitialized memory is UB
+        let mut value = std::mem::MaybeUninit::<T>::zeroed();
+        let buf = unsafe {
+            std::slice::from_raw_parts_mut(
+                value.as_mut_ptr().cast::<u8>(),
+                std::mem::size_of::<T>(),
+            )
+        };
+        self.read(addr, buf)?;
+        Ok(unsafe { value.assume_init() })
     }
 
     /// Given a pointer that points to a struct in another process, returns the struct
@@ -307,6 +314,21 @@ pub mod tests {
         let copy = LocalProcess.copy_pointer(&original).unwrap();
         assert_eq!(original.x, copy.x);
         assert_eq!(original.y, copy.y);
+    }
+
+    #[test]
+    fn test_copy_struct_alignment() {
+        #[derive(Copy, Clone, Debug, PartialEq)]
+        #[repr(C, align(16))]
+        struct Aligned {
+            a: u8,
+            b: u64,
+        }
+        let original = Aligned { a: 1, b: 2 };
+        let copy: Aligned = LocalProcess
+            .copy_struct(&original as *const Aligned as usize)
+            .unwrap();
+        assert_eq!(original, copy);
     }
 
     #[test]
