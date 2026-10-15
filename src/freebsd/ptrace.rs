@@ -1,7 +1,7 @@
 use libc::{c_int, c_void, lwpid_t, pid_t};
-use libc::{PT_ATTACH, PT_DETACH};
+use libc::{PIOD_READ_D, PT_ATTACH, PT_DETACH, PT_IO};
 
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::ptr;
 
 macro_rules! ptrace {
@@ -31,5 +31,33 @@ pub fn attach(tid: lwpid_t) -> Result<(), Error> {
 pub fn detach(tid: lwpid_t) -> Result<(), Error> {
     ptrace!(PT_DETACH, tid, ptr::null(), 0);
 
+    Ok(())
+}
+
+#[repr(C)]
+struct PtraceIoDesc {
+    piod_op: c_int,
+    piod_offs: *mut c_void,
+    piod_addr: *mut c_void,
+    piod_len: usize,
+}
+
+pub fn read(pid: pid_t, addr: usize, buf: &mut [u8]) -> Result<(), Error> {
+    let mut desc = PtraceIoDesc {
+        piod_op: PIOD_READ_D,
+        piod_offs: addr as *mut c_void,
+        piod_addr: buf.as_mut_ptr() as *mut c_void,
+        piod_len: buf.len(),
+    };
+    ptrace!(
+        PT_IO,
+        pid,
+        &mut desc as *mut PtraceIoDesc as *const c_void,
+        0
+    );
+
+    if desc.piod_len != buf.len() {
+        return Err(Error::new(ErrorKind::UnexpectedEof, "partial read"));
+    }
     Ok(())
 }

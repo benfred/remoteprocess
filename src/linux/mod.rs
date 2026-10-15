@@ -160,8 +160,33 @@ impl Process {
 
 impl super::ProcessMemory for Process {
     fn read(&self, addr: usize, buf: &mut [u8]) -> Result<(), Error> {
-        let handle: ProcessHandle = self.pid.try_into()?;
-        Ok(handle.copy_address(addr, buf)?)
+        let local = libc::iovec {
+            iov_base: buf.as_mut_ptr() as *mut libc::c_void,
+            iov_len: buf.len(),
+        };
+        let remote = libc::iovec {
+            iov_base: addr as *mut libc::c_void,
+            iov_len: buf.len(),
+        };
+        let read = unsafe { libc::process_vm_readv(self.pid, &local, 1, &remote, 1, 0) };
+        if read < 0 {
+            let err = std::io::Error::last_os_error();
+            return match err.raw_os_error() {
+                // read_process_memory falls back to /proc/<pid>/mem, which never reads short
+                Some(libc::ENOSYS) | Some(libc::EPERM) => {
+                    let handle: ProcessHandle = self.pid.try_into()?;
+                    Ok(handle.copy_address(addr, buf)?)
+                }
+                _ => Err(Error::IOError(err)),
+            };
+        }
+        if read as usize != buf.len() {
+            return Err(Error::IOError(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "partial read",
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -372,6 +397,34 @@ fn get_ppid_status(stat: &[u8]) -> Option<Pid> {
 mod tests {
     use super::*;
     use mark_flaky_tests::flaky;
+
+    #[test]
+    fn test_read_fails_on_short_read() {
+        use crate::ProcessMemory;
+
+        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+        let mem = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                2 * page,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                -1,
+                0,
+            )
+        };
+        assert_ne!(mem, libc::MAP_FAILED);
+        assert_eq!(
+            unsafe { libc::munmap((mem as usize + page) as *mut _, page) },
+            0
+        );
+
+        let process = Process::new(std::process::id() as Pid).unwrap();
+        let mut buf = [0u8; 8];
+        assert!(process.read(mem as usize + page - 8, &mut buf).is_ok());
+        assert!(process.read(mem as usize + page - 4, &mut buf).is_err());
+        unsafe { libc::munmap(mem, page) };
+    }
 
     #[test]
     fn test_parse_active_stat() {

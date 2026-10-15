@@ -4,9 +4,7 @@ mod procstat;
 mod ptrace;
 
 use libc::{lwpid_t, pid_t};
-use read_process_memory::{CopyAddress, ProcessHandle};
 
-use std::convert::TryInto;
 use std::sync::{Arc, Mutex, Weak};
 
 use super::{Error, ProcessMemory};
@@ -136,8 +134,15 @@ impl Thread {
 
 impl ProcessMemory for Process {
     fn read(&self, addr: usize, buf: &mut [u8]) -> Result<(), Error> {
-        let handle: ProcessHandle = self.pid.try_into()?;
-        Ok(handle.copy_address(addr, buf)?)
+        // EBUSY means the process is already traced, e.g. locked by the caller
+        let lock = match ProcessLock::new(self.pid) {
+            Ok(lock) => Some(lock),
+            Err(Error::IOError(e)) if e.raw_os_error() == Some(libc::EBUSY) => None,
+            Err(e) => return Err(e),
+        };
+        let result = ptrace::read(self.pid, addr, buf);
+        drop(lock);
+        Ok(result?)
     }
 }
 
