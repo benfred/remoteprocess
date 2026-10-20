@@ -78,6 +78,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [lint]
     timeout-minutes: 30
+    env:
+      CROSS_REV: 51f46f296253d8122c927c5bb933e3c4f27cc317
     steps:
       - uses: actions/checkout@v7
 
@@ -92,14 +94,12 @@ jobs:
         with:
           path: |
             ~/.cargo/bin/cross
-          key: ${{ runner.os }}-cross-${{ hashFiles('**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cross-
+          key: ${{ runner.os }}-cross-${{ env.CROSS_REV }}
 
       - name: Install cross
         if: steps.cache-cross.outputs.cache-hit != 'true'
         run: |
-          cargo install cross --git https://github.com/cross-rs/cross --rev 51f46f296253d8122c927c5bb933e3c4f27cc317
+          cargo install cross --git https://github.com/cross-rs/cross --rev ${{ env.CROSS_REV }}
           cross --version
 
       - name: Cross-compile test binaries
