@@ -22,11 +22,11 @@ cfg-if = "1.0.1"
 [target.'cfg(target_os="macos")'.dependencies]
 mach_o_sys = "0.1.1"
 mach = "0.3.2"
-libproc = "0.14"
+libproc = "0.15"
 
 [target.'cfg(target_os="linux")'.dependencies]
-nix = {version = "0.31", default-features = false, features = ["ptrace", "sched", "signal"]}
-object = "0.40"
+nix = {version = "0.32", default-features = false, features = ["ptrace", "sched", "signal"]}
+object = "0.41"
 addr2line = "0.27"
 lazy_static = "1.5.0"
 memmap2 = "0.9.10"
